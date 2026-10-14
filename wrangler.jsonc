@@ -6,7 +6,8 @@
   "workers_dev": true,
   "preview_urls": false,
   "vars": {
-    "ACCESS_TEAM_DOMAIN": "vasilispngs.cloudflareaccess.com"
+    "ACCESS_TEAM_DOMAIN": "vasilispngs.cloudflareaccess.com",
+    "ACCESS_AUD": "c2dfb94b77bce48d9424a7c401cea828482fea67f3fe1d6613b2426f85daf6ad"
   },
   "assets": {
     "directory": "./public",
