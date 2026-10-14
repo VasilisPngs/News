@@ -219,14 +219,14 @@ const item = (row) => ({
   image: row.image || null
 });
 
-const rank = (row, now) => row.affinity + Math.min(row.coverage - 1, 5) * 0.04 - ((now - row.published_at) / 43200000) * 0.1;
-
 export function pick(rows, now, limit = FOR_YOU_LIMIT) {
   const sorted = rows.map((row) => row.affinity).sort((a, b) => a - b);
   const median = sorted.length ? sorted[Math.floor(sorted.length / 2)] : 0;
+  const spread = (sorted.at(-1) ?? 0) - median || 1;
+  const score = (row) => (row.affinity - median) / spread + Math.min(row.coverage - 1, 5) * 0.05 - ((now - row.published_at) / WINDOW_MS) * 0.2;
   return rows
     .filter((row) => row.affinity >= median)
-    .sort((a, b) => rank(b, now) - rank(a, now))
+    .sort((a, b) => score(b) - score(a))
     .slice(0, limit);
 }
 

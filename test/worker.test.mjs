@@ -67,11 +67,11 @@ test("For You picks from your sources what matches your topics, grouped by story
   assert.ok(items.indexOf(story) === 1);
 });
 
-test("the median gate keeps the better half and ranks by affinity, coverage and age", () => {
+test("the median gate keeps the better half and relevance outweighs freshness", () => {
   const now = Date.now();
   const row = (id, affinity, coverage = 1, age = 0) => ({ id, affinity, coverage, published_at: now - age * HOUR });
-  const picked = pick([row("a", 0.1), row("b", 0.5, 1, 1), row("c", 0.48, 3, 1), row("d", 0.2), row("e", 0.3, 1, 30)], now);
-  assert.deepEqual(picked.map((entry) => entry.id), ["c", "b", "e"]);
+  const picked = pick([row("a", 0.1), row("b", 0.5, 1, 40), row("c", 0.45, 3, 1), row("d", 0.2), row("e", 0.3), row("f", 0.48, 1, 2), row("g", 0.05)], now);
+  assert.deepEqual(picked.map((entry) => entry.id), ["f", "c", "b", "e"]);
   assert.deepEqual(pick([row("x", 0), row("y", 0)], now).map((entry) => entry.id).sort(), ["x", "y"]);
   assert.deepEqual(pick([], now), []);
 });
