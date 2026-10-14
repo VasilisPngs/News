@@ -37,14 +37,33 @@ function openMenu(article, mode, anchor) {
   popMenu(anchor, sections);
 }
 
+function thumbnail(article, row) {
+  if (!article.image) return null;
+  row.classList.add("with-image");
+  return el("img", {
+    class: "article-image",
+    src: article.image,
+    alt: "",
+    loading: "lazy",
+    decoding: "async",
+    referrerPolicy: "no-referrer",
+    onerror: (event) => {
+      event.currentTarget.remove();
+      row.classList.remove("with-image");
+    }
+  });
+}
+
 function articleRow(article, mode) {
-  const content = el("div", { class: article.opened ? "list-item article read" : "list-item article" }, [
+  const content = el("div", { class: article.opened ? "list-item article read" : "list-item article" });
+  content.append(
     el("a", { class: "article-link grow", href: article.url, target: "_blank", rel: "noopener noreferrer", onclick: () => markOpened(article) }, [
       el("span", { class: "article-title", text: article.title }),
-      el("span", { class: "tiny", text: meta(article) })
+      el("span", { class: "tiny article-meta", text: meta(article) }),
+      thumbnail(article, content)
     ]),
     el("button", { class: "row-more", type: "button", onclick: (event) => openMenu(article, mode, event.currentTarget) }, icon("more"))
-  ]);
+  );
   if (mode === "foryou") return swipeAction(content, t("less"), () => act(article, "less"));
   if (mode === "saved") return swipeAction(content, t("remove"), () => act(article, "unsave"));
   return content;

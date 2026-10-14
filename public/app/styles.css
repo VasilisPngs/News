@@ -1565,6 +1565,47 @@ h1 + .tiny {
   overflow-wrap: anywhere;
 }
 
+.article.with-image {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--thumb);
+  grid-template-areas:
+    "title image"
+    "meta more";
+  --thumb: 76px;
+  column-gap: var(--item-gap);
+  row-gap: 6px;
+  padding-inline-end: var(--pad);
+}
+
+.with-image .article-link {
+  display: contents;
+}
+
+.with-image .article-title {
+  grid-area: title;
+  align-self: start;
+}
+
+.with-image .article-meta {
+  grid-area: meta;
+  align-self: center;
+}
+
+.article-image {
+  grid-area: image;
+  width: var(--thumb);
+  height: var(--thumb);
+  border-radius: 10px;
+  object-fit: cover;
+  background: var(--fill);
+}
+
+.with-image .row-more {
+  grid-area: more;
+  justify-self: end;
+  margin: -6px -8px -6px 0;
+}
+
 .article.read .article-title {
   color: var(--muted);
   font-weight: 400;

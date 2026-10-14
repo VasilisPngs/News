@@ -1,6 +1,8 @@
 const MAX_ITEMS = 40;
 const HOUR_MS = 3600000;
 const SKEW_LIMIT_MS = 3 * HOUR_MS;
+const THUMB_MIN = 200;
+const IMAGE_EXT = /\.(jpe?g|png|webp|avif|gif)(\?|#|$)/i;
 const FETCH_TIMEOUT_MS = 8000;
 const MAX_BYTES = 2_000_000;
 const AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 15_0) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15";
@@ -62,6 +64,46 @@ function atomLink(entry) {
   return attribute(preferred || links[0] || "", "href");
 }
 
+function smallest(candidates) {
+  const sized = candidates.filter((candidate) => candidate.width >= THUMB_MIN).sort((a, b) => a.width - b.width);
+  return (sized[0] || candidates[0] || {}).url || "";
+}
+
+function fromSrcset(srcset) {
+  return smallest(
+    srcset
+      .split(",")
+      .map((part) => part.trim().split(/\s+/))
+      .filter(([url, size]) => url && /^\d+w$/.test(size || ""))
+      .map(([url, size]) => ({ url, width: parseInt(size, 10) }))
+  );
+}
+
+function image(block, base) {
+  const candidates = [];
+  for (const element of block.match(/<media:(content|thumbnail)\b[^>]*>/gi) || []) {
+    const url = attribute(element, "url");
+    const media = /^<media:content/i.test(element) && !(attribute(element, "medium") === "image" || attribute(element, "type").startsWith("image/") || IMAGE_EXT.test(url));
+    if (url && !media) candidates.push({ url, width: parseInt(attribute(element, "width"), 10) || 0 });
+  }
+  for (const element of block.match(/<(enclosure|link)\b[^>]*>/gi) || []) {
+    const url = attribute(element, "url") || attribute(element, "href");
+    if (url && /^image\//i.test(attribute(element, "type"))) candidates.push({ url, width: 0 });
+  }
+  let picked = smallest(candidates);
+  if (!picked) {
+    const raw = (tag(block, "content:encoded") || tag(block, "description") || tag(block, "content") || tag(block, "summary")).replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1");
+    const markup = raw.includes("&lt;") ? entities(raw) : raw;
+    for (const element of markup.match(/<img\b[^>]*>/gi) || []) {
+      if (attribute(element, "width") === "1" || attribute(element, "height") === "1") continue;
+      picked = fromSrcset(attribute(element, "srcset")) || attribute(element, "src") || attribute(element, "data-src");
+      if (picked) break;
+    }
+  }
+  const url = picked ? absolute(picked, base).replace(/^http:/, "https:") : "";
+  return url.length <= 1000 ? url : "";
+}
+
 export const looksLikeFeed = (text) => /^\s*(<\?xml[^>]*>\s*)?(<!--[\s\S]*?-->\s*)*<(rss|feed|rdf:RDF)\b/i.test(text.slice(0, 2000));
 
 export function parseFeed(text, base, now = Date.now()) {
@@ -79,7 +121,7 @@ export function parseFeed(text, base, now = Date.now()) {
     const link = absolute(atom ? atomLink(block) : clean(tag(block, "link")) || clean(tag(block, "guid")), base);
     if (!heading || !link) continue;
     const stamp = atom ? tag(block, "published") || tag(block, "updated") : tag(block, "pubDate") || tag(block, "dc:date");
-    items.push({ title: heading.slice(0, 300), url: link, source: sourceName.slice(0, 80), published: time(clean(stamp), now) });
+    items.push({ title: heading.slice(0, 300), url: link, source: sourceName.slice(0, 80), image: image(block, base), published: time(clean(stamp), now) });
   }
   const ahead = Math.max(0, ...items.map((item) => item.published - now));
   const shift = ahead > 60000 && ahead <= SKEW_LIMIT_MS ? Math.ceil(ahead / HOUR_MS) * HOUR_MS : 0;

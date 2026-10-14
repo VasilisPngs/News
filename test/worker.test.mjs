@@ -139,6 +139,7 @@ test("a source is found from its site, listed newest first and can be renamed, o
   feed = (await api(worker, env, "/api/feed", { tab: "sources", source: blog.id })).json.items;
   assert.deepEqual(feed.map((item) => [item.title, item.source]), [["New", "Blog"], ["Old", "Blog"]]);
   assert.equal(rows(env, "SELECT etag FROM feeds WHERE owner = ?", blog.id)[0].etag, '"v1"');
+  assert.ok(feed.every((item) => item.image === null));
   await api(worker, env, "/api/sources", { action: "delete", id: blog.id });
   feed = (await api(worker, env, "/api/feed", { tab: "sources" })).json.items;
   assert.deepEqual(feed.map((item) => item.title), ["Second post"]);
@@ -148,6 +149,33 @@ test("Google News requests carry the consent cookie", async () => {
   const env = environment();
   const { calls } = await withTopic(env);
   assert.ok(calls.every((request) => request.headers.get("cookie") === "CONSENT=YES+cb; SOCS=CAI"));
+});
+
+test("source articles carry their picture, and older ones get it filled in on the next fetch", async () => {
+  const env = environment();
+  const now = Date.now();
+  let withImages = false;
+  network([
+    [
+      "https://pics.example/",
+      () =>
+        new Response(
+          `<rss><channel><title>Pics</title><item><title>One</title><link>https://pics.example/1</link><pubDate>${new Date(now - HOUR).toUTCString()}</pubDate>${withImages ? '<enclosure url="https://pics.example/1.jpg" type="image/jpeg"/>' : ""}</item></channel></rss>`
+        )
+    ]
+  ]);
+  await api(worker, env, "/api/sources", { action: "add", url: "pics.example" });
+  assert.equal((await api(worker, env, "/api/feed", { tab: "sources" })).json.items[0].image, null);
+  withImages = true;
+  await refresh(env, now + 21 * 60000);
+  assert.equal((await api(worker, env, "/api/feed", { tab: "sources" })).json.items[0].image, "https://pics.example/1.jpg");
+});
+
+test("an older database gains the picture column on first use", async () => {
+  const env = environment();
+  env.DB.sqlite.exec("CREATE TABLE articles (id TEXT PRIMARY KEY, kind TEXT NOT NULL, owner TEXT NOT NULL, story TEXT NOT NULL, title TEXT NOT NULL, url TEXT NOT NULL, source TEXT NOT NULL, lang TEXT, published_at INTEGER NOT NULL, seen_at INTEGER NOT NULL, tokens TEXT NOT NULL, vector TEXT, affinity REAL NOT NULL DEFAULT 0, opened_at INTEGER, hidden_at INTEGER, saved_at INTEGER, notified_at INTEGER)");
+  assert.equal((await api(worker, env, "/api/state", {})).status, 200);
+  assert.ok(rows(env, "PRAGMA table_info(articles)").some((column) => column.name === "image"));
 });
 
 test("a site without any feed is refused", async () => {

@@ -37,6 +37,23 @@ test("a feed that labels local time with the wrong offset is shifted back by who
   assert.equal(scheduled.items[0].published, NOW);
 });
 
+test("each item takes its picture from media tags, enclosures or the first real image in its text", () => {
+  const xml = `<?xml version="1.0"?><rss xmlns:media="http://search.yahoo.com/mrss/" xmlns:content="http://purl.org/rss/1.0/modules/content/"><channel><title>Pics</title>
+    <item><title>Media</title><link>https://p.example/1</link><media:content url="https://cdn.example/big.jpg" medium="image" width="1600"/><media:content url="https://cdn.example/small.jpg" medium="image" width="320"/><media:content url="https://cdn.example/clip.mp4" type="video/mp4"/></item>
+    <item><title>Thumb</title><link>https://p.example/2</link><media:thumbnail url="http://cdn.example/thumb.jpg"/></item>
+    <item><title>Enclosure</title><link>https://p.example/3</link><enclosure url="/uploads/e.webp" length="1" type="image/webp"/></item>
+    <item><title>Escaped</title><link>https://p.example/4</link><description>&lt;img src="https://track.example/p.gif" width="1" height="1"&gt;&lt;p&gt;Hi &lt;img src="https://cdn.example/full.jpg" srcset="https://cdn.example/full-150.jpg 150w, https://cdn.example/full-300.jpg 300w, https://cdn.example/full-1024.jpg 1024w"&gt;&lt;/p&gt;</description></item>
+    <item><title>Cdata</title><link>https://p.example/5</link><content:encoded><![CDATA[<figure><img data-src="https://cdn.example/lazy.png"></figure>]]></content:encoded></item>
+    <item><title>Nothing</title><link>https://p.example/6</link><description>Plain words</description></item>
+  </channel></rss>`;
+  assert.deepEqual(
+    parseFeed(xml, "https://p.example/feed", NOW).items.map((item) => item.image),
+    ["https://cdn.example/small.jpg", "https://cdn.example/thumb.jpg", "https://p.example/uploads/e.webp", "https://cdn.example/full-300.jpg", "https://cdn.example/lazy.png", ""]
+  );
+  const atom = `<feed xmlns="http://www.w3.org/2005/Atom"><title>A</title><entry><title>T</title><link href="https://a.example/1"/><link rel="enclosure" type="image/jpeg" href="https://a.example/1.jpg"/><updated>2026-10-14T08:00:00Z</updated></entry></feed>`;
+  assert.equal(parseFeed(atom, "https://a.example/feed", NOW).items[0].image, "https://a.example/1.jpg");
+});
+
 test("Atom entries take the alternate link and the published time", () => {
   const xml = `<?xml version="1.0" encoding="utf-8"?><feed xmlns="http://www.w3.org/2005/Atom"><title>Blog</title><link rel="self" href="https://blog.example/atom.xml"/><link href="https://blog.example/"/>
     <entry><title type="html">First &lt;post&gt;</title><link rel="replies" href="https://blog.example/1#comments"/><link rel="alternate" href="https://blog.example/1"/><published>2026-10-14T08:00:00Z</published><updated>2026-10-14T09:00:00Z</updated></entry>

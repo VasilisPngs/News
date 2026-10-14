@@ -31,7 +31,7 @@ const SCHEMA = [
   "CREATE TABLE IF NOT EXISTS sources (id TEXT PRIMARY KEY, title TEXT NOT NULL, site TEXT NOT NULL, feed TEXT NOT NULL UNIQUE, position INTEGER NOT NULL, created_at INTEGER NOT NULL)",
   "CREATE TABLE IF NOT EXISTS feeds (url TEXT PRIMARY KEY, owner TEXT NOT NULL, kind TEXT NOT NULL, lang TEXT, fetched_at INTEGER NOT NULL DEFAULT 0, etag TEXT, modified TEXT, failures INTEGER NOT NULL DEFAULT 0)",
   "CREATE INDEX IF NOT EXISTS feeds_owner ON feeds (owner)",
-  "CREATE TABLE IF NOT EXISTS articles (id TEXT PRIMARY KEY, kind TEXT NOT NULL, owner TEXT NOT NULL, story TEXT NOT NULL, title TEXT NOT NULL, url TEXT NOT NULL, source TEXT NOT NULL, lang TEXT, published_at INTEGER NOT NULL, seen_at INTEGER NOT NULL, tokens TEXT NOT NULL, vector TEXT, affinity REAL NOT NULL DEFAULT 0, opened_at INTEGER, hidden_at INTEGER, saved_at INTEGER, notified_at INTEGER)",
+  "CREATE TABLE IF NOT EXISTS articles (id TEXT PRIMARY KEY, kind TEXT NOT NULL, owner TEXT NOT NULL, story TEXT NOT NULL, title TEXT NOT NULL, url TEXT NOT NULL, source TEXT NOT NULL, lang TEXT, published_at INTEGER NOT NULL, seen_at INTEGER NOT NULL, tokens TEXT NOT NULL, vector TEXT, affinity REAL NOT NULL DEFAULT 0, opened_at INTEGER, hidden_at INTEGER, saved_at INTEGER, notified_at INTEGER, image TEXT)",
   "CREATE INDEX IF NOT EXISTS articles_kind_time ON articles (kind, published_at)",
   "CREATE INDEX IF NOT EXISTS articles_story ON articles (story)",
   "CREATE INDEX IF NOT EXISTS articles_owner ON articles (owner)",
@@ -66,13 +66,25 @@ function prepare(env) {
   if (!ready.has(env.DB)) {
     ready.set(
       env.DB,
-      env.DB.batch(SCHEMA.map((sql) => env.DB.prepare(sql))).catch((error) => {
-        ready.delete(env.DB);
-        throw error;
-      })
+      env.DB.batch(SCHEMA.map((sql) => env.DB.prepare(sql)))
+        .then(() => upgrade(env))
+        .catch((error) => {
+          ready.delete(env.DB);
+          throw error;
+        })
     );
   }
   return ready.get(env.DB);
+}
+
+async function upgrade(env) {
+  const columns = await env.DB.prepare("PRAGMA table_info(articles)").all();
+  if (columns.results.some((column) => column.name === "image")) return;
+  await env.DB.prepare("ALTER TABLE articles ADD COLUMN image TEXT")
+    .run()
+    .catch((error) => {
+      if (!/duplicate column/i.test(String(error && error.message))) throw error;
+    });
 }
 
 async function hashId(text) {
@@ -232,7 +244,8 @@ const item = (row) => ({
   published: row.published_at,
   opened: Boolean(row.opened_at),
   saved: Boolean(row.saved_at),
-  coverage: row.coverage || 1
+  coverage: row.coverage || 1,
+  image: row.image || null
 });
 
 async function feedRoute(request, env) {
@@ -240,22 +253,22 @@ async function feedRoute(request, env) {
   const now = Date.now();
   if (body.tab === "saved") {
     const rows = await env.DB.prepare(
-      "SELECT a.id, a.title, a.url, COALESCE(s.title, a.source) AS source, a.published_at, a.opened_at, a.saved_at FROM articles a LEFT JOIN sources s ON s.id = a.owner WHERE a.saved_at IS NOT NULL ORDER BY a.saved_at DESC"
+      "SELECT a.id, a.title, a.url, COALESCE(s.title, a.source) AS source, a.published_at, a.opened_at, a.saved_at, a.image FROM articles a LEFT JOIN sources s ON s.id = a.owner WHERE a.saved_at IS NOT NULL ORDER BY a.saved_at DESC"
     ).all();
     return json({ items: rows.results.map(item) });
   }
   if (body.tab === "sources") {
     const owner = typeof body.source === "string" && body.source ? body.source : null;
     const rows = await env.DB.prepare(
-      `SELECT a.id, a.title, a.url, s.title AS source, a.published_at, a.opened_at, a.saved_at FROM articles a JOIN sources s ON s.id = a.owner WHERE a.kind = 'source'${owner ? " AND a.owner = ?2" : ""} ORDER BY a.published_at DESC LIMIT ?1`
+      `SELECT a.id, a.title, a.url, s.title AS source, a.published_at, a.opened_at, a.saved_at, a.image FROM articles a JOIN sources s ON s.id = a.owner WHERE a.kind = 'source'${owner ? " AND a.owner = ?2" : ""} ORDER BY a.published_at DESC LIMIT ?1`
     )
       .bind(...(owner ? [SOURCES_LIMIT, owner] : [SOURCES_LIMIT]))
       .all();
     return json({ items: rows.results.map(item) });
   }
   const rows = await env.DB.prepare(
-    `SELECT id, title, url, source, published_at, opened AS opened_at, saved AS saved_at, coverage FROM (
-      SELECT a.id, a.title, a.url, a.source, a.published_at, a.affinity,
+    `SELECT id, title, url, source, published_at, opened AS opened_at, saved AS saved_at, coverage, image FROM (
+      SELECT a.id, a.title, a.url, a.source, a.published_at, a.affinity, a.image,
         MAX(a.opened_at) OVER same AS opened, MAX(a.saved_at) OVER same AS saved,
         ROW_NUMBER() OVER (PARTITION BY a.story ORDER BY a.affinity DESC, a.published_at DESC) AS place,
         (SELECT COUNT(DISTINCT b.source) FROM articles b WHERE b.story = a.story) AS coverage
@@ -351,7 +364,7 @@ async function reportRoute(request, env) {
 
 const insertArticle = (env, entry, now, story, words, vector, score) =>
   env.DB.prepare(
-    "INSERT OR IGNORE INTO articles (id, kind, owner, story, title, url, source, lang, published_at, seen_at, tokens, vector, affinity) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)"
+    "INSERT OR IGNORE INTO articles (id, kind, owner, story, title, url, source, lang, published_at, seen_at, tokens, vector, affinity, image) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)"
   ).bind(
     entry.id,
     entry.feed.kind,
@@ -365,7 +378,8 @@ const insertArticle = (env, entry, now, story, words, vector, score) =>
     now,
     words.join(" "),
     vector,
-    score
+    score,
+    entry.item.image || null
   );
 
 async function ingest(env, now, additions) {
@@ -451,6 +465,9 @@ export async function refresh(env, now, { owner = null, limit = FEEDS_PER_RUN } 
     for (const row of rows.results) known.add(row.id);
   }
   const additions = [...found.values()].filter((entry) => !known.has(entry.id));
+  for (const entry of found.values()) {
+    if (known.has(entry.id) && entry.item.image) updates.push(env.DB.prepare("UPDATE articles SET image = ?2 WHERE id = ?1 AND image IS NULL").bind(entry.id, entry.item.image));
+  }
   const touched = additions.length ? await ingest(env, now, additions) : new Set();
   await env.DB.batch(updates);
   return { added: additions.length, touched };
