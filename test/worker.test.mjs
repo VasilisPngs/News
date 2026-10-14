@@ -144,6 +144,12 @@ test("a source is found from its site, listed newest first and can be renamed, o
   assert.deepEqual(feed.map((item) => item.title), ["Second post"]);
 });
 
+test("Google News requests carry the consent cookie", async () => {
+  const env = environment();
+  const { calls } = await withTopic(env);
+  assert.ok(calls.every((request) => request.headers.get("cookie") === "CONSENT=YES+cb; SOCS=CAI"));
+});
+
 test("a site without any feed is refused", async () => {
   const env = environment();
   network([["https://none.example/", () => new Response("<html><head><title>None</title></head></html>")]]);
@@ -161,6 +167,7 @@ test("the cron fetches only due feeds, backs off failures and honours not modifi
   assert.equal(rows(env, "SELECT MAX(failures) AS n FROM feeds")[0].n, 0);
   await refresh(env, now + 16 * 60000);
   assert.deepEqual(rows(env, "SELECT failures FROM feeds").map((row) => row.failures), [1, 1]);
+  assert.deepEqual(rows(env, "SELECT kind, message FROM errors").map((row) => [row.kind, row.message]), [["feed", "http 503 (news.google.com)"], ["feed", "http 503 (news.google.com)"]]);
   const calls = network([[/news\.google\.com/, () => new Response(null, { status: 304 })]]);
   await refresh(env, now + 32 * 60000);
   assert.equal(calls.length, 0);

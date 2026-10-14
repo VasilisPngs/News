@@ -398,6 +398,15 @@ async function ingest(env, now, additions) {
   return touched;
 }
 
+function failure(env, now, url, page) {
+  let landed = "";
+  try {
+    landed = new URL(page.url || url).host;
+  } catch {}
+  const reason = page.status === 200 ? `not a feed: ${page.text.slice(0, 120).replace(/\s+/g, " ")}` : page.status ? `http ${page.status}` : page.error || "unreachable";
+  return env.DB.prepare("INSERT INTO errors (at, kind, message, route) VALUES (?1, 'feed', ?2, ?3)").bind(now, `${reason} (${landed})`.slice(0, 300), url.slice(0, 120));
+}
+
 function conditional(feed) {
   const headers = {};
   if (feed.etag) headers["if-none-match"] = feed.etag;
@@ -416,7 +425,7 @@ export async function refresh(env, now, { owner = null, limit = FEEDS_PER_RUN } 
         .all();
   const feeds = due.results;
   if (feeds.length === 0) return { added: 0, touched: new Set() };
-  const pages = await Promise.all(feeds.map((feed) => download(feed.url, feed.kind === "source" ? conditional(feed) : {}).catch(() => ({ status: 0, text: "" }))));
+  const pages = await Promise.all(feeds.map((feed) => download(feed.url, feed.kind === "source" ? conditional(feed) : {}).catch((error) => ({ status: 0, text: "", error: String(error && error.message) }))));
   const updates = [];
   const found = new Map();
   for (const [index, feed] of feeds.entries()) {
@@ -427,6 +436,7 @@ export async function refresh(env, now, { owner = null, limit = FEEDS_PER_RUN } 
     }
     if (page.status !== 200 || !looksLikeFeed(page.text)) {
       updates.push(env.DB.prepare("UPDATE feeds SET fetched_at = ?2, failures = failures + 1 WHERE url = ?1").bind(feed.url, now));
+      if (feed.failures < 2) updates.push(failure(env, now, feed.url, page));
       continue;
     }
     updates.push(env.DB.prepare("UPDATE feeds SET fetched_at = ?2, failures = 0, etag = ?3, modified = ?4 WHERE url = ?1").bind(feed.url, now, page.etag || null, page.modified || null));

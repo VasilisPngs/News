@@ -92,9 +92,12 @@ export function newsUrl(query, lang) {
   return lang === "el" ? `https://news.google.com/rss/search?q=${q}&hl=el&gl=GR&ceid=GR:el` : `https://news.google.com/rss/search?q=${q}&hl=en-US&gl=US&ceid=US:en`;
 }
 
+const GOOGLE_CONSENT = "CONSENT=YES+cb; SOCS=CAI";
+
 export async function download(url, headers = {}) {
+  const extra = new URL(url).hostname === "news.google.com" ? { cookie: GOOGLE_CONSENT } : {};
   const response = await fetch(url, {
-    headers: { "user-agent": AGENT, accept: "application/rss+xml, application/atom+xml, application/xml, text/xml, text/html;q=0.8, */*;q=0.5", ...headers },
+    headers: { "user-agent": AGENT, accept: "application/rss+xml, application/atom+xml, application/xml, text/xml, text/html;q=0.8, */*;q=0.5", ...extra, ...headers },
     redirect: "follow",
     signal: AbortSignal.timeout(FETCH_TIMEOUT_MS)
   });
