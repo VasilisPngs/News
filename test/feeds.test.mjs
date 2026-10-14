@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { parseFeed, looksLikeFeed, newsUrl, normalizeSite, discover } from "../src/feeds.js";
+import { parseFeed, looksLikeFeed, normalizeSite, discover } from "../src/feeds.js";
 import { network, rss } from "./helpers.mjs";
 
 const NOW = Date.parse("2026-10-14T10:00:00Z");
@@ -71,7 +71,7 @@ test("Atom entries take the alternate link and the published time", () => {
   );
 });
 
-test("feed detection, site addresses and Google News queries", () => {
+test("feed detection and site addresses", () => {
   assert.equal(looksLikeFeed('<?xml version="1.0"?>\n<!-- generator --><rss version="2.0">'), true);
   assert.equal(looksLikeFeed("<feed xmlns='http://www.w3.org/2005/Atom'>"), true);
   assert.equal(looksLikeFeed("<!doctype html><html>"), false);
@@ -79,8 +79,6 @@ test("feed detection, site addresses and Google News queries", () => {
   assert.equal(normalizeSite("http://blog.example/path"), "http://blog.example/path");
   assert.equal(normalizeSite("javascript:alert(1)"), "");
   assert.equal(normalizeSite(""), "");
-  assert.equal(newsUrl("Μπαρτσελόνα", "el"), "https://news.google.com/rss/search?q=%CE%9C%CF%80%CE%B1%CF%81%CF%84%CF%83%CE%B5%CE%BB%CF%8C%CE%BD%CE%B1%20when%3A2d&hl=el&gl=GR&ceid=GR:el");
-  assert.equal(newsUrl("AI", "en"), "https://news.google.com/rss/search?q=AI%20when%3A2d&hl=en-US&gl=US&ceid=US:en");
 });
 
 test("a site address leads to the feed its page links to", async () => {

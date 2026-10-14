@@ -1,24 +1,23 @@
 import { checkAccess } from "./access.js";
-import { parseFeed, newsUrl, download, discover, looksLikeFeed } from "./feeds.js";
+import { parseFeed, download, discover, looksLikeFeed } from "./feeds.js";
 import { quantize, encodeVector, decodeVector, encodeProfile, decodeProfile, learn, affinity, tokens, sameStory } from "./rank.js";
 import { createKey, publicKey, pushEndpoint, keyLength, sendPush } from "./push.js";
 
 const EMBED_MODEL = "@cf/baai/bge-m3";
-const TRANSLATE_MODEL = "@cf/meta/m2m100-1.2b";
 const EMBED_BATCH = 32;
 const FEEDS_PER_RUN = 4;
-const TOPIC_INTERVAL_MS = 15 * 60000;
-const SOURCE_INTERVAL_MS = 20 * 60000;
+const FEED_INTERVAL_MS = 20 * 60000;
 const MAX_BACKOFF = 4;
 const WINDOW_MS = 48 * 3600000;
 const STORY_SCAN = 600;
-const TOPIC_RETENTION_MS = 3 * 86400000;
-const SOURCE_RETENTION_MS = 14 * 86400000;
+const RETENTION_MS = 14 * 86400000;
+const RESCORE_LIMIT = 400;
 const ERROR_RETENTION_MS = 30 * 86400000;
 const FOR_YOU_LIMIT = 60;
 const SOURCES_LIMIT = 120;
 const NOTIFY_DAILY = 3;
 const NOTIFY_COVERAGE = 4;
+const NOTIFY_MIN_COVERAGE = 2;
 const NOTIFY_SPAN_MS = 12 * 3600000;
 const NOTIFY_FRESH_MS = 6 * 3600000;
 const NOTIFY_PERCENTILE = 0.7;
@@ -27,7 +26,7 @@ const MAX_PARAMS = 90;
 const WEIGHTS = { open: 1, save: 1, less: -1.5 };
 
 const SCHEMA = [
-  "CREATE TABLE IF NOT EXISTS topics (id TEXT PRIMARY KEY, name TEXT NOT NULL, query_en TEXT NOT NULL, vector TEXT, position INTEGER NOT NULL, created_at INTEGER NOT NULL)",
+  "CREATE TABLE IF NOT EXISTS topics (id TEXT PRIMARY KEY, name TEXT NOT NULL, vector TEXT, position INTEGER NOT NULL, created_at INTEGER NOT NULL)",
   "CREATE TABLE IF NOT EXISTS sources (id TEXT PRIMARY KEY, title TEXT NOT NULL, site TEXT NOT NULL, feed TEXT NOT NULL UNIQUE, position INTEGER NOT NULL, created_at INTEGER NOT NULL)",
   "CREATE TABLE IF NOT EXISTS feeds (url TEXT PRIMARY KEY, owner TEXT NOT NULL, kind TEXT NOT NULL, lang TEXT, fetched_at INTEGER NOT NULL DEFAULT 0, etag TEXT, modified TEXT, failures INTEGER NOT NULL DEFAULT 0)",
   "CREATE INDEX IF NOT EXISTS feeds_owner ON feeds (owner)",
@@ -78,13 +77,19 @@ function prepare(env) {
 }
 
 async function upgrade(env) {
-  const columns = await env.DB.prepare("PRAGMA table_info(articles)").all();
-  if (columns.results.some((column) => column.name === "image")) return;
-  await env.DB.prepare("ALTER TABLE articles ADD COLUMN image TEXT")
-    .run()
-    .catch((error) => {
-      if (!/duplicate column/i.test(String(error && error.message))) throw error;
-    });
+  const [articles, topics] = await Promise.all([env.DB.prepare("PRAGMA table_info(articles)").all(), env.DB.prepare("PRAGMA table_info(topics)").all()]);
+  const steps = [];
+  if (!articles.results.some((column) => column.name === "image")) steps.push("ALTER TABLE articles ADD COLUMN image TEXT");
+  if (topics.results.some((column) => column.name === "query_en")) {
+    steps.push("ALTER TABLE topics DROP COLUMN query_en", "DELETE FROM feeds WHERE kind = 'topic'", "DELETE FROM articles WHERE kind = 'topic' AND saved_at IS NULL");
+  }
+  for (const sql of steps) {
+    await env.DB.prepare(sql)
+      .run()
+      .catch((error) => {
+        if (!/duplicate column|no such column/i.test(String(error && error.message))) throw error;
+      });
+  }
 }
 
 async function hashId(text) {
@@ -111,18 +116,6 @@ async function embed(env, texts) {
   }
 }
 
-async function translate(env, text) {
-  if (!env.AI || !/[Ͱ-Ͽἀ-῿]/.test(text)) return text;
-  for (const [source, target] of [["el", "en"], ["greek", "english"]]) {
-    try {
-      const result = await env.AI.run(TRANSLATE_MODEL, { text, source_lang: source, target_lang: target });
-      const out = cleanName(result && result.translated_text);
-      if (out && !/[Ͱ-Ͽἀ-῿]/.test(out)) return out;
-    } catch {}
-  }
-  return text;
-}
-
 async function vapidKey(env) {
   const stored = await getMeta(env, "vapid");
   if (stored) return JSON.parse(stored);
@@ -140,30 +133,17 @@ async function state(env) {
   return { topics: topics.results, sources: sources.results, pushKey: publicKey(key) };
 }
 
-const topicFeeds = (name, english) => [
-  { url: newsUrl(name, "el"), lang: "el" },
-  { url: newsUrl(english, "en"), lang: "en" }
-];
+const addFeed = (env, url, owner) => env.DB.prepare("INSERT OR IGNORE INTO feeds (url, owner, kind, fetched_at) VALUES (?1, ?2, 'source', 0)").bind(url, owner);
 
-const addFeed = (env, url, owner, kind, lang) =>
-  env.DB.prepare("INSERT OR IGNORE INTO feeds (url, owner, kind, lang, fetched_at) VALUES (?1, ?2, ?3, ?4, 0)").bind(url, owner, kind, lang);
-
-function removeOwner(env, table, id) {
-  return [
-    env.DB.prepare(`DELETE FROM ${table} WHERE id = ?1`).bind(id),
-    env.DB.prepare("DELETE FROM feeds WHERE owner = ?1").bind(id),
-    env.DB.prepare("DELETE FROM articles WHERE owner = ?1 AND saved_at IS NULL").bind(id)
-  ];
-}
-
-function warm(env, ctx, owner) {
-  ctx.waitUntil(refresh(env, Date.now(), { owner }).catch((error) => recordError(env, { kind: "refresh", message: String(error && error.message), route: "/warm" })));
+function background(env, ctx, work, route) {
+  ctx.waitUntil(work.catch((error) => recordError(env, { kind: "background", message: String(error && error.message), route })));
 }
 
 async function topicsRoute(request, env, ctx) {
   const body = await readJson(request);
   if (body.action === "delete") {
-    await env.DB.batch(removeOwner(env, "topics", String(body.id || "")));
+    await env.DB.prepare("DELETE FROM topics WHERE id = ?1").bind(String(body.id || "")).run();
+    background(env, ctx, rescore(env, Date.now()), "/topics");
     return json(await state(env));
   }
   if (body.action !== "add" && body.action !== "rename") return json({ error: "invalid_action" }, 400);
@@ -173,26 +153,13 @@ async function topicsRoute(request, env, ctx) {
   const id = body.action === "add" ? crypto.randomUUID() : String(body.id || "");
   if (body.action === "rename" && !existing.some((topic) => topic.id === id)) return json({ error: "not_found" }, 404);
   if (existing.some((topic) => topic.id !== id && sameName(topic.name, name))) return json({ error: "duplicate" }, 409);
-  const [english, vectors] = await Promise.all([translate(env, name), embed(env, [name])]);
-  const vector = vectors[0] ? encodeVector(vectors[0]) : null;
-  const statements =
-    body.action === "add"
-      ? [
-          env.DB.prepare("INSERT INTO topics (id, name, query_en, vector, position, created_at) VALUES (?1, ?2, ?3, ?4, (SELECT COALESCE(MAX(position) + 1, 0) FROM topics), ?5)").bind(
-            id,
-            name,
-            english,
-            vector,
-            Date.now()
-          )
-        ]
-      : [
-          env.DB.prepare("UPDATE topics SET name = ?2, query_en = ?3, vector = ?4 WHERE id = ?1").bind(id, name, english, vector),
-          env.DB.prepare("DELETE FROM feeds WHERE owner = ?1").bind(id)
-        ];
-  for (const feed of topicFeeds(name, english)) statements.push(addFeed(env, feed.url, id, "topic", feed.lang));
-  await env.DB.batch(statements);
-  warm(env, ctx, id);
+  const [vector] = await embed(env, [name]);
+  const encoded = vector ? encodeVector(vector) : null;
+  await (body.action === "add"
+    ? env.DB.prepare("INSERT INTO topics (id, name, vector, position, created_at) VALUES (?1, ?2, ?3, (SELECT COALESCE(MAX(position) + 1, 0) FROM topics), ?4)").bind(id, name, encoded, Date.now())
+    : env.DB.prepare("UPDATE topics SET name = ?2, vector = ?3 WHERE id = ?1").bind(id, name, encoded)
+  ).run();
+  background(env, ctx, rescore(env, Date.now()), "/topics");
   return json(await state(env));
 }
 
@@ -200,7 +167,11 @@ async function sourcesRoute(request, env, ctx) {
   const body = await readJson(request);
   const id = String(body.id || "");
   if (body.action === "delete") {
-    await env.DB.batch(removeOwner(env, "sources", id));
+    await env.DB.batch([
+      env.DB.prepare("DELETE FROM sources WHERE id = ?1").bind(id),
+      env.DB.prepare("DELETE FROM feeds WHERE owner = ?1").bind(id),
+      env.DB.prepare("DELETE FROM articles WHERE owner = ?1 AND saved_at IS NULL").bind(id)
+    ]);
     return json(await state(env));
   }
   if (body.action === "rename") {
@@ -230,9 +201,9 @@ async function sourcesRoute(request, env, ctx) {
       found.feed,
       Date.now()
     ),
-    addFeed(env, found.feed, created, "source", null)
+    addFeed(env, found.feed, created)
   ]);
-  warm(env, ctx, created);
+  background(env, ctx, refresh(env, Date.now(), { owner: created }), "/sources");
   return json(await state(env));
 }
 
@@ -248,6 +219,17 @@ const item = (row) => ({
   image: row.image || null
 });
 
+const rank = (row, now) => row.affinity + Math.min(row.coverage - 1, 5) * 0.04 - ((now - row.published_at) / 43200000) * 0.1;
+
+export function pick(rows, now, limit = FOR_YOU_LIMIT) {
+  const sorted = rows.map((row) => row.affinity).sort((a, b) => a - b);
+  const median = sorted.length ? sorted[Math.floor(sorted.length / 2)] : 0;
+  return rows
+    .filter((row) => row.affinity >= median)
+    .sort((a, b) => rank(b, now) - rank(a, now))
+    .slice(0, limit);
+}
+
 async function feedRoute(request, env) {
   const body = await readJson(request);
   const now = Date.now();
@@ -260,28 +242,26 @@ async function feedRoute(request, env) {
   if (body.tab === "sources") {
     const owner = typeof body.source === "string" && body.source ? body.source : null;
     const rows = await env.DB.prepare(
-      `SELECT a.id, a.title, a.url, s.title AS source, a.published_at, a.opened_at, a.saved_at, a.image FROM articles a JOIN sources s ON s.id = a.owner WHERE a.kind = 'source'${owner ? " AND a.owner = ?2" : ""} ORDER BY a.published_at DESC LIMIT ?1`
+      `SELECT a.id, a.title, a.url, s.title AS source, a.published_at, a.opened_at, a.saved_at, a.image FROM articles a JOIN sources s ON s.id = a.owner${owner ? " WHERE a.owner = ?2" : ""} ORDER BY a.published_at DESC LIMIT ?1`
     )
       .bind(...(owner ? [SOURCES_LIMIT, owner] : [SOURCES_LIMIT]))
       .all();
     return json({ items: rows.results.map(item) });
   }
   const rows = await env.DB.prepare(
-    `SELECT id, title, url, source, published_at, opened AS opened_at, saved AS saved_at, coverage, image FROM (
-      SELECT a.id, a.title, a.url, a.source, a.published_at, a.affinity, a.image,
+    `SELECT id, title, url, source, published_at, opened AS opened_at, saved AS saved_at, coverage, image, affinity FROM (
+      SELECT a.id, a.title, a.url, s.title AS source, a.published_at, a.affinity, a.image,
         MAX(a.opened_at) OVER same AS opened, MAX(a.saved_at) OVER same AS saved,
         ROW_NUMBER() OVER (PARTITION BY a.story ORDER BY a.affinity DESC, a.published_at DESC) AS place,
-        (SELECT COUNT(DISTINCT b.source) FROM articles b WHERE b.story = a.story) AS coverage
-      FROM articles a
-      WHERE a.kind = 'topic' AND a.published_at > ?1 AND a.story NOT IN (SELECT story FROM articles WHERE hidden_at IS NOT NULL)
+        (SELECT COUNT(DISTINCT b.owner) FROM articles b WHERE b.story = a.story) AS coverage
+      FROM articles a JOIN sources s ON s.id = a.owner
+      WHERE a.vector IS NOT NULL AND a.published_at > ?1 AND a.story NOT IN (SELECT story FROM articles WHERE hidden_at IS NOT NULL)
       WINDOW same AS (PARTITION BY a.story)
-    ) WHERE place = 1
-    ORDER BY affinity + MIN(coverage - 1, 5) * 0.04 - (?2 - published_at) / 43200000.0 * 0.1 DESC
-    LIMIT ?3`
+    ) WHERE place = 1 ORDER BY published_at DESC LIMIT ?2`
   )
-    .bind(now - WINDOW_MS, now, FOR_YOU_LIMIT)
+    .bind(now - WINDOW_MS, RESCORE_LIMIT)
     .all();
-  return json({ items: rows.results.map(item) });
+  return json({ items: pick(rows.results, now).map(item) });
 }
 
 async function articleRoute(request, env) {
@@ -362,54 +342,81 @@ async function reportRoute(request, env) {
   return json({ ok: true });
 }
 
-const insertArticle = (env, entry, now, story, words, vector, score) =>
-  env.DB.prepare(
-    "INSERT OR IGNORE INTO articles (id, kind, owner, story, title, url, source, lang, published_at, seen_at, tokens, vector, affinity, image) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)"
-  ).bind(
-    entry.id,
-    entry.feed.kind,
-    entry.feed.owner,
-    story,
-    entry.item.title,
-    entry.item.url,
-    entry.item.source || new URL(entry.item.url).hostname.replace(/^www\./, ""),
-    entry.feed.lang,
-    entry.item.published,
-    now,
-    words.join(" "),
-    vector,
-    score,
-    entry.item.image || null
-  );
+async function interests(env) {
+  const [topics, profile] = await Promise.all([env.DB.prepare("SELECT vector FROM topics").all(), getMeta(env, "profile")]);
+  return { topics: topics.results.map((topic) => decodeVector(topic.vector)).filter(Boolean), profile: decodeProfile(profile) };
+}
 
-async function ingest(env, now, additions) {
-  const topical = additions.filter((entry) => entry.feed.kind === "topic");
-  const vectors = await embed(env, topical.map((entry) => entry.item.title));
-  const [topicRows, profileText, recent] = await Promise.all([
-    env.DB.prepare("SELECT id, name, query_en, vector FROM topics").all(),
-    getMeta(env, "profile"),
-    topical.length
-      ? env.DB.prepare("SELECT story, tokens FROM articles WHERE kind = 'topic' AND published_at > ?1 ORDER BY published_at DESC LIMIT ?2").bind(now - WINDOW_MS, STORY_SCAN).all()
-      : { results: [] }
+async function enrich(env, now, list) {
+  const [vectors, taste, recent] = await Promise.all([
+    embed(env, list.map((entry) => entry.title)),
+    interests(env),
+    env.DB.prepare("SELECT story, tokens FROM articles WHERE tokens != '' AND published_at > ?1 ORDER BY published_at DESC LIMIT ?2").bind(now - WINDOW_MS, STORY_SCAN).all()
   ]);
-  const topicVectors = topicRows.results.map((topic) => decodeVector(topic.vector)).filter(Boolean);
-  const ignore = new Map(topicRows.results.map((topic) => [topic.id, new Set([...tokens(topic.name), ...tokens(topic.query_en)])]));
-  const profile = decodeProfile(profileText);
-  const window = recent.results.map((row) => ({ story: row.story, words: row.tokens ? row.tokens.split(" ") : [] }));
-  const statements = [];
-  const touched = new Set();
-  topical.forEach((entry, index) => {
-    const words = tokens(entry.item.title);
-    const match = window.find((other) => sameStory(words, other.words, ignore.get(entry.feed.owner)));
+  if (vectors.length !== list.length) return null;
+  const window = recent.results.map((row) => ({ story: row.story, words: row.tokens.split(" ") }));
+  return list.map((entry, index) => {
+    const words = tokens(entry.title);
+    const match = window.find((other) => sameStory(words, other.words));
     const story = match ? match.story : entry.id;
     window.unshift({ story, words });
-    touched.add(story);
-    const vector = vectors[index];
-    statements.push(insertArticle(env, entry, now, story, words, vector ? encodeVector(vector) : null, vector ? affinity(vector, profile, topicVectors) : 0));
+    return { story, words: words.join(" "), vector: encodeVector(vectors[index]), affinity: affinity(vectors[index], taste.profile, taste.topics) };
   });
-  for (const entry of additions) if (entry.feed.kind !== "topic") statements.push(insertArticle(env, entry, now, entry.id, [], null, 0));
+}
+
+async function ingest(env, now, additions) {
+  const scored = await enrich(env, now, additions.map((entry) => ({ id: entry.id, title: entry.item.title })));
+  const touched = new Set();
+  const statements = additions.map((entry, index) => {
+    const extra = scored ? scored[index] : { story: entry.id, words: "", vector: null, affinity: 0 };
+    if (scored) touched.add(extra.story);
+    return env.DB.prepare(
+      "INSERT OR IGNORE INTO articles (id, kind, owner, story, title, url, source, lang, published_at, seen_at, tokens, vector, affinity, image) VALUES (?1, 'source', ?2, ?3, ?4, ?5, ?6, NULL, ?7, ?8, ?9, ?10, ?11, ?12)"
+    ).bind(
+      entry.id,
+      entry.feed.owner,
+      extra.story,
+      entry.item.title,
+      entry.item.url,
+      entry.item.source || new URL(entry.item.url).hostname.replace(/^www\./, ""),
+      entry.item.published,
+      now,
+      extra.words,
+      extra.vector,
+      extra.affinity,
+      entry.item.image || null
+    );
+  });
   for (const batch of chunks(statements, 50)) await env.DB.batch(batch);
   return touched;
+}
+
+export async function backfill(env, now, limit = EMBED_BATCH) {
+  const rows = (await env.DB.prepare("SELECT id, title FROM articles WHERE vector IS NULL AND published_at > ?1 ORDER BY published_at DESC LIMIT ?2").bind(now - WINDOW_MS, limit).all()).results;
+  if (rows.length === 0) return 0;
+  const scored = await enrich(env, now, rows);
+  if (!scored) return 0;
+  await env.DB.batch(
+    rows.map((row, index) =>
+      env.DB.prepare("UPDATE articles SET story = ?2, tokens = ?3, vector = ?4, affinity = ?5 WHERE id = ?1").bind(row.id, scored[index].story, scored[index].words, scored[index].vector, scored[index].affinity)
+    )
+  );
+  return rows.length;
+}
+
+export async function rescore(env, now, limit = RESCORE_LIMIT) {
+  await prepare(env);
+  const [taste, rows] = await Promise.all([
+    interests(env),
+    env.DB.prepare("SELECT id, vector, affinity FROM articles WHERE vector IS NOT NULL AND published_at > ?1 ORDER BY published_at DESC LIMIT ?2").bind(now - WINDOW_MS, limit).all()
+  ]);
+  const updates = [];
+  for (const row of rows.results) {
+    const next = affinity(decodeVector(row.vector), taste.profile, taste.topics);
+    if (Math.abs(next - row.affinity) > 1e-4) updates.push(env.DB.prepare("UPDATE articles SET affinity = ?2 WHERE id = ?1").bind(row.id, next));
+  }
+  for (const batch of chunks(updates, 50)) await env.DB.batch(batch);
+  return updates.length;
 }
 
 function failure(env, now, url, page) {
@@ -432,14 +439,10 @@ export async function refresh(env, now, { owner = null, limit = FEEDS_PER_RUN } 
   await prepare(env);
   const due = owner
     ? await env.DB.prepare("SELECT * FROM feeds WHERE owner = ?1").bind(owner).all()
-    : await env.DB.prepare(
-        "SELECT * FROM feeds WHERE fetched_at + (CASE kind WHEN 'topic' THEN ?2 ELSE ?3 END) * (1 << MIN(failures, ?4)) <= ?1 ORDER BY fetched_at LIMIT ?5"
-      )
-        .bind(now, TOPIC_INTERVAL_MS, SOURCE_INTERVAL_MS, MAX_BACKOFF, limit)
-        .all();
+    : await env.DB.prepare("SELECT * FROM feeds WHERE fetched_at + ?2 * (1 << MIN(failures, ?3)) <= ?1 ORDER BY fetched_at LIMIT ?4").bind(now, FEED_INTERVAL_MS, MAX_BACKOFF, limit).all();
   const feeds = due.results;
   if (feeds.length === 0) return { added: 0, touched: new Set() };
-  const pages = await Promise.all(feeds.map((feed) => download(feed.url, feed.kind === "source" ? conditional(feed) : {}).catch((error) => ({ status: 0, text: "", error: String(error && error.message) }))));
+  const pages = await Promise.all(feeds.map((feed) => download(feed.url, conditional(feed)).catch((error) => ({ status: 0, text: "", error: String(error && error.message) }))));
   const updates = [];
   const found = new Map();
   for (const [index, feed] of feeds.entries()) {
@@ -475,31 +478,39 @@ export async function refresh(env, now, { owner = null, limit = FEEDS_PER_RUN } 
 
 async function threshold(env, now) {
   const since = now - WINDOW_MS;
-  const total = await env.DB.prepare("SELECT COUNT(*) AS n FROM articles WHERE kind = 'topic' AND vector IS NOT NULL AND published_at > ?1").bind(since).first("n");
+  const total = await env.DB.prepare("SELECT COUNT(*) AS n FROM articles WHERE vector IS NOT NULL AND published_at > ?1").bind(since).first("n");
   if (!total) return Infinity;
-  return env.DB.prepare("SELECT affinity FROM articles WHERE kind = 'topic' AND vector IS NOT NULL AND published_at > ?1 ORDER BY affinity LIMIT 1 OFFSET ?2")
+  return env.DB.prepare("SELECT affinity FROM articles WHERE vector IS NOT NULL AND published_at > ?1 ORDER BY affinity LIMIT 1 OFFSET ?2")
     .bind(since, Math.min(total - 1, Math.floor(total * NOTIFY_PERCENTILE)))
     .first("affinity");
 }
 
 export async function notify(env, now, touched) {
   if (touched.size === 0) return null;
-  const subscriptions = (await env.DB.prepare("SELECT endpoint, p256dh, auth FROM subscriptions").all()).results;
-  if (subscriptions.length === 0) return null;
+  const [subscriptions, sourceCount] = await Promise.all([
+    env.DB.prepare("SELECT endpoint, p256dh, auth FROM subscriptions").all(),
+    env.DB.prepare("SELECT COUNT(*) AS n FROM sources").first("n")
+  ]);
+  if (subscriptions.results.length === 0 || sourceCount < NOTIFY_MIN_COVERAGE) return null;
+  const needed = Math.min(NOTIFY_COVERAGE, sourceCount);
   const counter = `sent:${athensDay(now)}`;
   const sent = Number(await getMeta(env, counter)) || 0;
   if (sent >= NOTIFY_DAILY) return null;
   const stories = [...touched].slice(0, MAX_PARAMS);
   const covered = await env.DB.prepare(
-    `SELECT story, COUNT(DISTINCT source) AS coverage FROM articles WHERE story IN (${slots(stories.length, 3)}) AND published_at > ?1 AND story NOT IN (SELECT story FROM articles WHERE notified_at IS NOT NULL OR hidden_at IS NOT NULL) GROUP BY story HAVING coverage >= ?2`
+    `SELECT story, COUNT(DISTINCT owner) AS coverage FROM articles WHERE story IN (${slots(stories.length, 3)}) AND published_at > ?1 AND story NOT IN (SELECT story FROM articles WHERE notified_at IS NOT NULL OR hidden_at IS NOT NULL) GROUP BY story HAVING coverage >= ?2`
   )
-    .bind(now - NOTIFY_SPAN_MS, NOTIFY_COVERAGE, ...stories)
+    .bind(now - NOTIFY_SPAN_MS, needed, ...stories)
     .all();
   if (covered.results.length === 0) return null;
   const bar = await threshold(env, now);
   let best = null;
   for (const { story, coverage } of covered.results) {
-    const lead = await env.DB.prepare("SELECT id, title, source, affinity, published_at FROM articles WHERE story = ?1 AND vector IS NOT NULL ORDER BY affinity DESC LIMIT 1").bind(story).first();
+    const lead = await env.DB.prepare(
+      "SELECT a.id, a.title, COALESCE(s.title, a.source) AS source, a.affinity, a.published_at FROM articles a LEFT JOIN sources s ON s.id = a.owner WHERE a.story = ?1 AND a.vector IS NOT NULL ORDER BY a.affinity DESC LIMIT 1"
+    )
+      .bind(story)
+      .first();
     if (!lead || lead.affinity < bar || now - lead.published_at > NOTIFY_FRESH_MS) continue;
     if (!best || lead.affinity > best.lead.affinity) best = { story, coverage, lead };
   }
@@ -517,7 +528,7 @@ export async function notify(env, now, touched) {
   };
   const gone = [];
   await Promise.all(
-    subscriptions.map(async (subscription) => {
+    subscriptions.results.map(async (subscription) => {
       try {
         const response = await sendPush(jwk, subscription, notification, origin);
         if (response.status === 404 || response.status === 410) gone.push(subscription.endpoint);
@@ -537,8 +548,8 @@ export async function notify(env, now, touched) {
 
 export async function prune(env, now) {
   await env.DB.batch([
-    env.DB.prepare("DELETE FROM articles WHERE saved_at IS NULL AND ((kind = 'topic' AND seen_at < ?1) OR (kind = 'source' AND seen_at < ?2))").bind(now - TOPIC_RETENTION_MS, now - SOURCE_RETENTION_MS),
-    env.DB.prepare("DELETE FROM articles WHERE saved_at IS NULL AND owner NOT IN (SELECT id FROM topics UNION SELECT id FROM sources)"),
+    env.DB.prepare("DELETE FROM articles WHERE saved_at IS NULL AND seen_at < ?1").bind(now - RETENTION_MS),
+    env.DB.prepare("DELETE FROM articles WHERE saved_at IS NULL AND owner NOT IN (SELECT id FROM sources)"),
     env.DB.prepare("DELETE FROM errors WHERE at < ?1").bind(now - ERROR_RETENTION_MS),
     env.DB.prepare("DELETE FROM meta WHERE key LIKE 'sent:%' AND key < ?1").bind(`sent:${athensDay(now - 2 * 86400000)}`)
   ]);
@@ -578,7 +589,11 @@ export default {
       (async () => {
         const { touched } = await refresh(env, now);
         await notify(env, now, touched);
-        if (new Date(now).getUTCMinutes() < 2) await prune(env, now);
+        await backfill(env, now);
+        if (new Date(now).getUTCMinutes() < 2) {
+          await rescore(env, now);
+          await prune(env, now);
+        }
       })().catch((error) => recordError(env, { kind: "cron", message: String(error && error.message ? error.message : error), stack: error && error.stack, route: "/cron" }))
     );
   }

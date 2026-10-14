@@ -2,6 +2,7 @@ import { el, icon, emptyState, promptSheet, toast } from "../dom.js";
 import { t } from "../i18n.js";
 import { appState, feed, loadFeed, addTopic } from "../store.js";
 import { articleList } from "./articles.js";
+import { newSource } from "./sources.js";
 
 const barActions = document.getElementById("bar-actions");
 
@@ -23,6 +24,10 @@ function page(state) {
 export function renderForYou(container) {
   container.append(el("h1", { text: t("forYouTitle") }));
   barActions.append(el("button", { class: "bar-btn", type: "button", onclick: newTopic }, icon("plus")));
+  if (appState().sources.length === 0) {
+    container.append(page(emptyState("newspaper", t("forYouNoSources"), t("forYouNoSourcesHint"), el("button", { class: "btn primary", type: "button", text: t("newSource"), onclick: newSource }))));
+    return;
+  }
   if (appState().topics.length === 0) {
     container.append(page(emptyState("sparkles", t("noTopics"), t("noTopicsHint"), el("button", { class: "btn primary", type: "button", text: t("newTopic"), onclick: newTopic }))));
     return;

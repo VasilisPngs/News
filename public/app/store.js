@@ -132,17 +132,19 @@ export async function addSource(url) {
   setState(await post("/api/sources", { action: "add", url }));
   const added = state.sources.find((source) => !before.has(source.id));
   warmSources(added && added.id);
+  warmForYou();
   return added || null;
 }
 
 export async function renameSource(id, title) {
   setState(await post("/api/sources", { action: "rename", id, title }));
   loadFeed("sources", null, true).catch(() => {});
+  loadFeed("foryou", null, true).catch(() => {});
 }
 
 export async function deleteSource(id) {
   setState(await post("/api/sources", { action: "delete", id }));
-  await loadFeed("sources", null, true).catch(() => {});
+  await Promise.all([loadFeed("sources", null, true).catch(() => {}), loadFeed("foryou", null, true).catch(() => {})]);
 }
 
 export async function orderSources(ids) {

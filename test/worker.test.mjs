@@ -1,112 +1,135 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import worker, { refresh, notify, prune } from "../src/index.js";
-import { environment, network, api, rss, context, device, decrypt } from "./helpers.mjs";
+import worker, { refresh, notify, prune, backfill, pick } from "../src/index.js";
+import { environment, network, api, rss, context, device, decrypt, ai } from "./helpers.mjs";
 
 const HOUR = 3600000;
 
-const greek = (now) =>
-  rss([
-    { title: "Γαλατάσαραϊ - Μπαρτσελόνα 1-4: Ο Λεβαντόφσκι διέλυσε τη Γαλατάσαραϊ - Novasports", link: "https://news.google.com/rss/articles/a1", at: now - HOUR, source: "Novasports" },
-    { title: "Λεβαντόφσκι και Γιαμάλ διέλυσαν τη Γαλατάσαραϊ - Gazzetta", link: "https://news.google.com/rss/articles/a2", at: now - 2 * HOUR, source: "Gazzetta" },
-    { title: "Γαλατάσαραϊ: Ο Λεβαντόφσκι σκόραρε δις - Sport24", link: "https://news.google.com/rss/articles/a3", at: now - 3 * HOUR, source: "Sport24" },
-    { title: "Μπαρτσελόνα: Ανανέωση συμβολαίου για τον Πέδρι - Novasports", link: "https://news.google.com/rss/articles/a4", at: now - 4 * HOUR, source: "Novasports" }
+const gazzetta = (now) =>
+  rss(
+    [
+      { title: "Γαλατάσαραϊ - Μπαρτσελόνα 1-4: Ο Λεβαντόφσκι διέλυσε τη Γαλατάσαραϊ", link: "https://gazzetta.example/a1", at: now - HOUR },
+      { title: "Ολυμπιακός: Νίκη στο Καραϊσκάκη", link: "https://gazzetta.example/a2", at: now - 2 * HOUR },
+      { title: "Καιρός: Βροχές σε όλη τη χώρα", link: "https://gazzetta.example/a3", at: now - 3 * HOUR },
+      { title: "Μπαρτσελόνα: Ανανέωση συμβολαίου για τον Πέδρι", link: "https://gazzetta.example/a4", at: now - 4 * HOUR }
+    ],
+    "Gazzetta"
+  );
+
+const sport = (now) =>
+  rss(
+    [
+      { title: "Λεβαντόφσκι και Γιαμάλ διέλυσαν τη Γαλατάσαραϊ", link: "https://sport.example/b1", at: now - 2 * HOUR },
+      { title: "Παναθηναϊκός: Ήττα στην Τούμπα", link: "https://sport.example/b2", at: now - 5 * HOUR }
+    ],
+    "Sport24"
+  );
+
+const sites = (now) =>
+  network([
+    ["https://gazzetta.example/", () => new Response(gazzetta(now))],
+    ["https://sport.example/", () => new Response(sport(now))]
   ]);
 
-const english = (now) => rss([{ title: "Barcelona thrash Galatasaray in Istanbul - ESPN", link: "https://news.google.com/rss/articles/e1", at: now - HOUR, source: "ESPN" }]);
-
-function googleNews(now, extra = []) {
-  return network([
-    [/news\.google\.com\/rss\/search\?q=%CE%9C.*hl=el/, () => new Response(greek(now))],
-    [/news\.google\.com\/rss\/search\?q=Barcelona.*hl=en-US/, () => new Response(english(now))],
-    ...extra
-  ]);
-}
-
-async function withTopic(env, now = Date.now()) {
-  const calls = googleNews(now);
-  const response = await api(worker, env, "/api/topics", { action: "add", name: "Μπαρτσελόνα" });
-  return { response, calls };
+async function setup(env, now = Date.now(), { topic = "Μπαρτσελόνα", sources = ["gazzetta.example", "sport.example"] } = {}) {
+  sites(now);
+  if (topic) await api(worker, env, "/api/topics", { action: "add", name: topic });
+  for (const url of sources) await api(worker, env, "/api/sources", { action: "add", url });
+  return (await api(worker, env, "/api/state", {})).json;
 }
 
 const rows = (env, sql, ...params) => env.DB.sqlite.prepare(sql).all(...params).map((row) => ({ ...row }));
 
-test("a topic gets a Greek and an English feed and fills For You grouped by story", async () => {
+const forYou = async (env) => (await api(worker, env, "/api/feed", { tab: "foryou" })).json.items;
+
+const storyOf = (env, title) => rows(env, "SELECT story FROM articles WHERE title LIKE ?", `${title}%`)[0].story;
+
+const PEDRI = "Μπαρτσελόνα: Ανανέωση συμβολαίου για τον Πέδρι";
+
+test("For You picks from your sources what matches your topics, grouped by story", async () => {
   const env = environment();
-  const { response, calls } = await withTopic(env);
+  const response = await api(worker, env, "/api/topics", { action: "add", name: "Μπαρτσελόνα" });
   assert.equal(response.status, 200);
   assert.deepEqual(response.json.topics.map((topic) => topic.name), ["Μπαρτσελόνα"]);
-  assert.equal(response.json.sources.length, 0);
   assert.ok(response.json.pushKey.length > 80);
-  assert.deepEqual(
-    rows(env, "SELECT lang, url FROM feeds ORDER BY lang").map((row) => [row.lang, decodeURIComponent(new URL(row.url).searchParams.get("q"))]),
-    [
-      ["el", "Μπαρτσελόνα when:2d"],
-      ["en", "Barcelona when:2d"]
-    ]
-  );
-  assert.equal(calls.length, 2);
-  const feed = await api(worker, env, "/api/feed", { tab: "foryou" });
-  const items = feed.json.items;
-  assert.equal(items.length, 3);
-  const story = items.find((item) => item.coverage === 3);
-  assert.ok(story);
+  assert.equal(rows(env, "SELECT COUNT(*) AS n FROM feeds")[0].n, 0);
+  assert.deepEqual(await forYou(env), []);
+  await setup(env, Date.now(), { topic: null });
+  assert.equal(rows(env, "SELECT COUNT(*) AS n FROM articles WHERE vector IS NOT NULL AND kind = 'source'")[0].n, 6);
+  const items = await forYou(env);
+  assert.equal(items.length, 4);
+  assert.ok(!items.some((item) => item.title.startsWith("Καιρός")));
+  const story = items.find((item) => item.coverage === 2);
+  assert.match(story.title, /Λεβαντόφσκι/);
+  assert.equal(story.source, "Gazzetta");
   assert.equal(story.opened, false);
-  assert.ok(items.some((item) => item.title === "Barcelona thrash Galatasaray in Istanbul" && item.source === "ESPN"));
-  assert.ok(items.some((item) => item.title === "Μπαρτσελόνα: Ανανέωση συμβολαίου για τον Πέδρι" && item.coverage === 1));
-  assert.equal(rows(env, "SELECT COUNT(*) AS n FROM articles WHERE vector IS NOT NULL")[0].n, 5);
+  assert.equal(items[0].title, PEDRI);
+  assert.ok(items.indexOf(story) === 1);
 });
 
-test("adding the same topic twice is refused and renaming swaps its feeds", async () => {
+test("the median gate keeps the better half and ranks by affinity, coverage and age", () => {
+  const now = Date.now();
+  const row = (id, affinity, coverage = 1, age = 0) => ({ id, affinity, coverage, published_at: now - age * HOUR });
+  const picked = pick([row("a", 0.1), row("b", 0.5, 1, 1), row("c", 0.48, 3, 1), row("d", 0.2), row("e", 0.3, 1, 30)], now);
+  assert.deepEqual(picked.map((entry) => entry.id), ["c", "b", "e"]);
+  assert.deepEqual(pick([row("x", 0), row("y", 0)], now).map((entry) => entry.id).sort(), ["x", "y"]);
+  assert.deepEqual(pick([], now), []);
+});
+
+test("a topic added later rescores the articles already there", async () => {
   const env = environment();
-  const { response } = await withTopic(env);
-  const id = response.json.topics[0].id;
+  await setup(env, Date.now(), { topic: null });
+  assert.ok(rows(env, "SELECT affinity FROM articles").every((row) => row.affinity === 0));
+  await api(worker, env, "/api/topics", { action: "add", name: "Μπαρτσελόνα" });
+  const pedri = rows(env, "SELECT affinity FROM articles WHERE title = ?", PEDRI)[0].affinity;
+  const weather = rows(env, "SELECT affinity FROM articles WHERE title LIKE 'Καιρός%'")[0].affinity;
+  assert.ok(pedri > 0.3 && weather < 0.05);
+});
+
+test("adding the same topic twice is refused and renaming re-embeds it", async () => {
+  const env = environment();
+  const id = (await api(worker, env, "/api/topics", { action: "add", name: "Μπαρτσελόνα" })).json.topics[0].id;
+  const before = rows(env, "SELECT vector FROM topics")[0].vector;
   assert.equal((await api(worker, env, "/api/topics", { action: "add", name: "μπαρτσελόνα" })).status, 409);
-  network([[/news\.google\.com/, () => new Response(rss([]))]]);
   const renamed = await api(worker, env, "/api/topics", { action: "rename", id, name: "AI" });
   assert.deepEqual(renamed.json.topics, [{ id, name: "AI" }]);
-  assert.deepEqual(
-    rows(env, "SELECT url FROM feeds").map((row) => new URL(row.url).searchParams.get("q")),
-    ["AI when:2d", "AI when:2d"]
-  );
+  assert.notEqual(rows(env, "SELECT vector FROM topics")[0].vector, before);
   assert.equal((await api(worker, env, "/api/topics", { action: "rename", id: "missing", name: "X" })).status, 404);
   assert.equal((await api(worker, env, "/api/topics", { action: "add", name: "   " })).status, 400);
+  assert.equal(rows(env, "SELECT COUNT(*) AS n FROM feeds")[0].n, 0);
 });
 
 test("opening, saving and Suggest Less shape the feed and the profile", async () => {
   const env = environment();
-  await withTopic(env);
-  const items = (await api(worker, env, "/api/feed", { tab: "foryou" })).json.items;
-  const story = items.find((item) => item.coverage === 3);
-  const other = items.find((item) => item.coverage === 1 && item.source === "Novasports");
+  await setup(env);
+  const items = await forYou(env);
+  const story = items.find((item) => item.coverage === 2);
+  const other = items.find((item) => item.title === PEDRI);
   assert.equal((await api(worker, env, "/api/article", { id: story.id, action: "open" })).status, 200);
   assert.ok(rows(env, "SELECT value FROM meta WHERE key = 'profile'")[0].value.length > 1000);
   assert.equal((await api(worker, env, "/api/article", { id: other.id, action: "save" })).status, 200);
-  let feed = (await api(worker, env, "/api/feed", { tab: "foryou" })).json.items;
-  assert.equal(feed.find((item) => item.coverage === 3).opened, true);
+  let feed = await forYou(env);
+  assert.equal(feed.find((item) => item.coverage === 2).opened, true);
   assert.equal(feed.find((item) => item.id === other.id).saved, true);
   const saved = (await api(worker, env, "/api/feed", { tab: "saved" })).json.items;
-  assert.deepEqual(saved.map((item) => item.id), [other.id]);
+  assert.deepEqual(saved.map((item) => [item.id, item.source]), [[other.id, "Gazzetta"]]);
   await api(worker, env, "/api/article", { id: story.id, action: "less" });
-  feed = (await api(worker, env, "/api/feed", { tab: "foryou" })).json.items;
-  assert.equal(feed.length, 2);
-  assert.ok(!feed.some((item) => item.coverage === 3));
+  feed = await forYou(env);
+  assert.ok(!feed.some((item) => item.coverage === 2));
+  assert.ok(feed.some((item) => item.id === other.id));
   await api(worker, env, "/api/article", { id: other.id, action: "unsave" });
   assert.equal((await api(worker, env, "/api/feed", { tab: "saved" })).json.items.length, 0);
   assert.equal((await api(worker, env, "/api/article", { id: "nope", action: "open" })).status, 404);
   assert.equal((await api(worker, env, "/api/article", { id: other.id, action: "explode" })).status, 400);
 });
 
-test("deleting a topic removes its feeds and articles but keeps what was saved", async () => {
+test("deleting a topic keeps every article and rescoring follows", async () => {
   const env = environment();
-  const { response } = await withTopic(env);
-  const items = (await api(worker, env, "/api/feed", { tab: "foryou" })).json.items;
-  await api(worker, env, "/api/article", { id: items[0].id, action: "save" });
-  const after = await api(worker, env, "/api/topics", { action: "delete", id: response.json.topics[0].id });
+  const state = await setup(env);
+  const after = await api(worker, env, "/api/topics", { action: "delete", id: state.topics[0].id });
   assert.deepEqual(after.json.topics, []);
-  assert.equal(rows(env, "SELECT COUNT(*) AS n FROM feeds")[0].n, 0);
-  assert.equal((await api(worker, env, "/api/feed", { tab: "foryou" })).json.items.length, 1);
-  assert.equal((await api(worker, env, "/api/feed", { tab: "saved" })).json.items.length, 1);
+  assert.equal(rows(env, "SELECT COUNT(*) AS n FROM articles")[0].n, 6);
+  assert.ok(rows(env, "SELECT affinity FROM articles").every((row) => row.affinity < 1e-3));
 });
 
 test("a source is found from its site, listed newest first and can be renamed, ordered and deleted", async () => {
@@ -143,12 +166,7 @@ test("a source is found from its site, listed newest first and can be renamed, o
   await api(worker, env, "/api/sources", { action: "delete", id: blog.id });
   feed = (await api(worker, env, "/api/feed", { tab: "sources" })).json.items;
   assert.deepEqual(feed.map((item) => item.title), ["Second post"]);
-});
-
-test("Google News requests carry the consent cookie", async () => {
-  const env = environment();
-  const { calls } = await withTopic(env);
-  assert.ok(calls.every((request) => request.headers.get("cookie") === "CONSENT=YES+cb; SOCS=CAI"));
+  assert.deepEqual((await forYou(env)).map((item) => item.title), ["Second post"]);
 });
 
 test("source articles carry their picture, and older ones get it filled in on the next fetch", async () => {
@@ -169,6 +187,21 @@ test("source articles carry their picture, and older ones get it filled in on th
   withImages = true;
   await refresh(env, now + 21 * 60000);
   assert.equal((await api(worker, env, "/api/feed", { tab: "sources" })).json.items[0].image, "https://pics.example/1.jpg");
+  assert.equal((await forYou(env))[0].image, "https://pics.example/1.jpg");
+});
+
+test("articles stored without a vector get one later and join For You", async () => {
+  const env = environment({ AI: { run: async () => Promise.reject(new Error("down")) } });
+  const now = Date.now();
+  await setup(env, now, { topic: null });
+  assert.equal(rows(env, "SELECT COUNT(*) AS n FROM articles WHERE vector IS NULL AND tokens = ''")[0].n, 6);
+  assert.deepEqual(await forYou(env), []);
+  env.AI = ai();
+  assert.equal(await backfill(env, now), 6);
+  assert.equal(await backfill(env, now), 0);
+  const items = await forYou(env);
+  assert.equal(items.length, 5);
+  assert.equal(items.find((item) => /Λεβαντόφσκι/.test(item.title)).coverage, 2);
 });
 
 test("an older database gains the picture column on first use", async () => {
@@ -176,6 +209,31 @@ test("an older database gains the picture column on first use", async () => {
   env.DB.sqlite.exec("CREATE TABLE articles (id TEXT PRIMARY KEY, kind TEXT NOT NULL, owner TEXT NOT NULL, story TEXT NOT NULL, title TEXT NOT NULL, url TEXT NOT NULL, source TEXT NOT NULL, lang TEXT, published_at INTEGER NOT NULL, seen_at INTEGER NOT NULL, tokens TEXT NOT NULL, vector TEXT, affinity REAL NOT NULL DEFAULT 0, opened_at INTEGER, hidden_at INTEGER, saved_at INTEGER, notified_at INTEGER)");
   assert.equal((await api(worker, env, "/api/state", {})).status, 200);
   assert.ok(rows(env, "PRAGMA table_info(articles)").some((column) => column.name === "image"));
+});
+
+test("topic feeds of the previous version and their unsaved articles go, saved ones stay", async () => {
+  const env = environment();
+  const now = Date.now();
+  env.DB.sqlite.exec(`
+    CREATE TABLE topics (id TEXT PRIMARY KEY, name TEXT NOT NULL, query_en TEXT, vector TEXT, position INTEGER NOT NULL, created_at INTEGER NOT NULL);
+    INSERT INTO topics VALUES ('t1', 'Apple', 'Apple', NULL, 0, 1);
+    CREATE TABLE feeds (url TEXT PRIMARY KEY, owner TEXT NOT NULL, kind TEXT NOT NULL, lang TEXT, fetched_at INTEGER NOT NULL DEFAULT 0, etag TEXT, modified TEXT, failures INTEGER NOT NULL DEFAULT 0);
+    INSERT INTO feeds (url, owner, kind, lang) VALUES ('https://news.google.com/rss/search?q=Apple', 't1', 'topic', 'en'), ('https://site.example/feed', 's1', 'source', NULL);
+    CREATE TABLE sources (id TEXT PRIMARY KEY, title TEXT NOT NULL, site TEXT NOT NULL, feed TEXT NOT NULL UNIQUE, position INTEGER NOT NULL, created_at INTEGER NOT NULL);
+    INSERT INTO sources VALUES ('s1', 'Site', 'https://site.example/', 'https://site.example/feed', 0, 1);
+    CREATE TABLE articles (id TEXT PRIMARY KEY, kind TEXT NOT NULL, owner TEXT NOT NULL, story TEXT NOT NULL, title TEXT NOT NULL, url TEXT NOT NULL, source TEXT NOT NULL, lang TEXT, published_at INTEGER NOT NULL, seen_at INTEGER NOT NULL, tokens TEXT NOT NULL, vector TEXT, affinity REAL NOT NULL DEFAULT 0, opened_at INTEGER, hidden_at INTEGER, saved_at INTEGER, notified_at INTEGER, image TEXT);
+  `);
+  const insert = env.DB.sqlite.prepare("INSERT INTO articles (id, kind, owner, story, title, url, source, published_at, seen_at, tokens, saved_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, '', ?)");
+  insert.run("x", "source", "s1", "x", "Kept", "https://site.example/x", "Site", now, now, null);
+  insert.run("g1", "topic", "t1", "g1", "Gone", "https://news.google.com/a", "Verge", now, now, null);
+  insert.run("g2", "topic", "t1", "g2", "Saved", "https://news.google.com/b", "Verge", now, now, now);
+  const state = await api(worker, env, "/api/state", {});
+  assert.deepEqual(state.json.topics, [{ id: "t1", name: "Apple" }]);
+  assert.ok(!rows(env, "PRAGMA table_info(topics)").some((column) => column.name === "query_en"));
+  assert.deepEqual(rows(env, "SELECT kind FROM feeds"), [{ kind: "source" }]);
+  assert.deepEqual(rows(env, "SELECT id FROM articles ORDER BY id").map((row) => row.id), ["g2", "x"]);
+  const saved = (await api(worker, env, "/api/feed", { tab: "saved" })).json.items;
+  assert.deepEqual(saved.map((item) => [item.title, item.source]), [["Saved", "Verge"]]);
 });
 
 test("a site without any feed is refused", async () => {
@@ -189,26 +247,23 @@ test("a site without any feed is refused", async () => {
 test("the cron fetches only due feeds, backs off failures and honours not modified", async () => {
   const env = environment();
   const now = Date.now();
-  await withTopic(env, now);
-  network([[/news\.google\.com/, () => new Response("busy", { status: 503 })]]);
+  await setup(env, now, { topic: null, sources: ["gazzetta.example"] });
+  network([["https://gazzetta.example/", () => new Response("busy", { status: 503 })]]);
   assert.equal((await refresh(env, now + 5 * 60000)).added, 0);
-  assert.equal(rows(env, "SELECT MAX(failures) AS n FROM feeds")[0].n, 0);
-  await refresh(env, now + 16 * 60000);
-  assert.deepEqual(rows(env, "SELECT failures FROM feeds").map((row) => row.failures), [1, 1]);
-  assert.deepEqual(rows(env, "SELECT kind, message FROM errors").map((row) => [row.kind, row.message]), [["feed", "http 503 (news.google.com)"], ["feed", "http 503 (news.google.com)"]]);
-  const calls = network([[/news\.google\.com/, () => new Response(null, { status: 304 })]]);
-  await refresh(env, now + 32 * 60000);
+  assert.equal(rows(env, "SELECT failures FROM feeds")[0].failures, 0);
+  await refresh(env, now + 21 * 60000);
+  assert.equal(rows(env, "SELECT failures FROM feeds")[0].failures, 1);
+  assert.deepEqual(rows(env, "SELECT kind, message FROM errors").map((row) => [row.kind, row.message]), [["feed", "http 503 (gazzetta.example)"]]);
+  const calls = network([["https://gazzetta.example/", () => new Response(null, { status: 304 })]]);
+  await refresh(env, now + 55 * 60000);
   assert.equal(calls.length, 0);
-  await refresh(env, now + 47 * 60000);
-  assert.equal(calls.length, 2);
-  assert.deepEqual(rows(env, "SELECT failures FROM feeds").map((row) => row.failures), [0, 0]);
+  await refresh(env, now + 62 * 60000);
+  assert.equal(calls.length, 1);
+  assert.equal(rows(env, "SELECT failures FROM feeds")[0].failures, 0);
 });
 
-test("a widely covered story in your topics is pushed once, at most three times a day", async () => {
-  const env = environment();
-  const now = Date.now();
-  await withTopic(env, now);
-  const target = await device();
+async function subscribed(env, endpoint) {
+  const target = await device(endpoint);
   const pushes = [];
   network([
     [
@@ -219,14 +274,23 @@ test("a widely covered story in your topics is pushed once, at most three times 
       }
     ]
   ]);
-  assert.equal((await api(worker, env, "/api/push", { action: "subscribe", subscription: target.subscription, lang: "el" }, { host: "localhost" })).status, 200);
-  const story = rows(env, "SELECT story FROM articles WHERE title LIKE 'Λεβαντόφσκι%'")[0].story;
-  env.DB.sqlite.prepare("UPDATE articles SET affinity = CASE WHEN story = ? THEN 0.9 ELSE 0.1 END").run(story);
-  env.DB.sqlite.prepare("INSERT INTO articles (id, kind, owner, story, title, url, source, lang, published_at, seen_at, tokens, vector, affinity) SELECT 'extra', kind, owner, story, 'Γαλατάσαραϊ: Λεβαντόφσκι ξανά', 'https://news.google.com/rss/articles/x', 'Sport-FM', lang, ?, ?, tokens, vector, 0.8 FROM articles WHERE story = ? LIMIT 1").run(now - HOUR, now, story);
+  assert.equal((await api(worker, env, "/api/push", { action: "subscribe", subscription: target.subscription, lang: "el" })).status, 200);
+  return pushes;
+}
+
+const highlight = (env, story) => env.DB.sqlite.prepare("UPDATE articles SET affinity = CASE WHEN story = ? THEN 0.9 ELSE 0.1 END").run(story);
+
+test("a story your sources share in your topics is pushed once, at most three times a day", async () => {
+  const env = environment();
+  const now = Date.now();
+  await setup(env, now);
+  const pushes = await subscribed(env);
+  const story = storyOf(env, "Λεβαντόφσκι");
+  highlight(env, story);
   assert.equal(await notify(env, now, new Set([story])), story);
   assert.equal(pushes.length, 1);
   assert.equal(pushes[0].body.web_push, 8030);
-  assert.equal(pushes[0].body.notification.body.endsWith("· 4 πηγές"), true);
+  assert.equal(pushes[0].body.notification.body, "Gazzetta · 2 πηγές");
   assert.equal(pushes[0].body.notification.navigate, "https://localhost/");
   assert.match(pushes[0].authorization, /^vapid t=.+, k=.+$/);
   assert.equal(await notify(env, now, new Set([story])), null);
@@ -236,42 +300,67 @@ test("a widely covered story in your topics is pushed once, at most three times 
   assert.equal(pushes.length, 1);
 });
 
+test("a lone source, a story only one source wrote, or a dull story never push", async () => {
+  const env = environment();
+  const now = Date.now();
+  await setup(env, now, { sources: ["gazzetta.example"] });
+  const early = await subscribed(env);
+  const story = storyOf(env, "Γαλατάσαραϊ");
+  highlight(env, story);
+  assert.equal(await notify(env, now, new Set([story])), null);
+  sites(now);
+  await api(worker, env, "/api/sources", { action: "add", url: "sport.example" });
+  const later = await subscribed(env);
+  const single = storyOf(env, PEDRI);
+  highlight(env, single);
+  assert.equal(await notify(env, now, new Set([single])), null);
+  env.DB.sqlite.prepare("UPDATE articles SET affinity = CASE WHEN story = ? THEN 0.1 ELSE 0.9 END").run(story);
+  assert.equal(await notify(env, now, new Set([story])), null);
+  assert.equal(early.length + later.length, 0);
+  assert.equal(rows(env, "SELECT COUNT(*) AS n FROM subscriptions")[0].n, 1);
+});
+
 test("a dead subscription is dropped when the push service says it is gone", async () => {
   const env = environment();
   const now = Date.now();
-  await withTopic(env, now);
+  await setup(env, now);
   const target = await device("https://fcm.googleapis.com/fcm/send/gone");
   network([[target.subscription.endpoint, () => new Response(null, { status: 410 })]]);
   await api(worker, env, "/api/push", { action: "subscribe", subscription: target.subscription, lang: "en" });
-  const story = rows(env, "SELECT story FROM articles WHERE title LIKE 'Λεβαντόφσκι%'")[0].story;
-  env.DB.sqlite.prepare("UPDATE articles SET affinity = 0.9, source = id WHERE story = ?").run(story);
-  env.DB.sqlite.prepare("INSERT INTO articles (id, kind, owner, story, title, url, source, lang, published_at, seen_at, tokens, vector, affinity) SELECT 'extra', kind, owner, story, title, 'https://x.example', 'Fourth', lang, published_at, seen_at, tokens, vector, 0.9 FROM articles WHERE story = ? LIMIT 1").run(story);
+  const story = storyOf(env, "Λεβαντόφσκι");
+  highlight(env, story);
   assert.equal(await notify(env, now, new Set([story])), story);
   assert.equal(rows(env, "SELECT COUNT(*) AS n FROM subscriptions")[0].n, 0);
   assert.equal((await api(worker, env, "/api/push", { action: "subscribe", subscription: { endpoint: "https://evil.example/x", keys: {} } })).status, 400);
 });
 
-test("pruning drops old unsaved articles and orphans", async () => {
+test("pruning drops unsaved articles after two weeks and orphans", async () => {
   const env = environment();
   const now = Date.now();
-  await withTopic(env, now);
+  await setup(env, now);
   const ids = rows(env, "SELECT id FROM articles ORDER BY id").map((row) => row.id);
-  env.DB.sqlite.prepare("UPDATE articles SET seen_at = ?").run(now - 4 * 86400000);
-  env.DB.sqlite.prepare("UPDATE articles SET saved_at = ? WHERE id = ?").run(now, ids[0]);
+  env.DB.sqlite.prepare("UPDATE articles SET seen_at = ?").run(now - 13 * 86400000);
   env.DB.sqlite.prepare("INSERT INTO articles (id, kind, owner, story, title, url, source, published_at, seen_at, tokens) VALUES ('orphan', 'source', 'gone', 'orphan', 'T', 'https://x.example', 'X', ?, ?, '')").run(now, now);
+  await prune(env, now);
+  assert.equal(rows(env, "SELECT COUNT(*) AS n FROM articles")[0].n, 6);
+  env.DB.sqlite.prepare("UPDATE articles SET seen_at = ?").run(now - 15 * 86400000);
+  env.DB.sqlite.prepare("UPDATE articles SET saved_at = ? WHERE id = ?").run(now, ids[0]);
   await prune(env, now);
   assert.deepEqual(rows(env, "SELECT id FROM articles").map((row) => row.id), [ids[0]]);
 });
 
-test("the cron runs refresh, notify and prune without throwing", async () => {
+test("the hourly cron runs refresh, notify, backfill, rescore and prune without throwing", async () => {
   const env = environment();
   const now = Date.now();
-  await withTopic(env, now);
-  network([[/news\.google\.com/, () => new Response(greek(now))]]);
+  await setup(env, now);
+  const when = Math.ceil((now + 21 * 60000) / HOUR) * HOUR;
+  const calls = sites(when);
   const ctx = context();
-  await worker.scheduled({ scheduledTime: now + 20 * 60000 }, env, ctx);
+  await worker.scheduled({ scheduledTime: when }, env, ctx);
   await ctx.settle();
+  assert.equal(calls.length, 2);
   assert.equal(rows(env, "SELECT COUNT(*) AS n FROM errors")[0].n, 0);
+  assert.equal(rows(env, "SELECT COUNT(*) AS n FROM articles")[0].n, 6);
 });
 
 test("requests need a valid Access session away from localhost", async () => {

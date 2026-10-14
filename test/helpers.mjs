@@ -56,21 +56,20 @@ function wordVector(text) {
   return vector;
 }
 
-export function ai(translations = {}) {
+export function ai() {
   const calls = [];
   return {
     calls,
     run: async (model, input) => {
       calls.push({ model, input });
       if (model === "@cf/baai/bge-m3") return { shape: [input.text.length, 1024], data: input.text.map(wordVector) };
-      if (model === "@cf/meta/m2m100-1.2b") return { translated_text: translations[input.text] || input.text };
       throw new Error(`unexpected model ${model}`);
     }
   };
 }
 
 export function environment(overrides = {}) {
-  return { DB: database(), AI: ai({ Μπαρτσελόνα: "Barcelona" }), ACCESS_TEAM_DOMAIN: "team.example", ...overrides };
+  return { DB: database(), AI: ai(), ACCESS_TEAM_DOMAIN: "team.example", ...overrides };
 }
 
 export function network(routes) {
