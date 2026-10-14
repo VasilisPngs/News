@@ -1,0 +1,36 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "news",
+  "main": "src/index.js",
+  "compatibility_date": "2026-10-06",
+  "workers_dev": true,
+  "preview_urls": false,
+  "vars": {
+    "ACCESS_TEAM_DOMAIN": "vasilispngs.cloudflareaccess.com"
+  },
+  "assets": {
+    "directory": "./public",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*"]
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "news"
+    }
+  ],
+  "ai": {
+    "binding": "AI"
+  },
+  "triggers": {
+    "crons": ["*/2 * * * *"]
+  },
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1,
+    "redact_query_string": true,
+    "logs": {
+      "invocation_logs": false
+    }
+  }
+}
