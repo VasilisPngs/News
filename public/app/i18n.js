@@ -44,12 +44,9 @@ const STRINGS = {
 
   savedTitle: ["Saved", "Αποθηκευμένα"],
   noSaved: ["Nothing saved", "Κανένα αποθηκευμένο"],
-  noSavedHint: ["Keep articles for later from their menu.", "Κράτα άρθρα για αργότερα από το μενού τους."],
+  noSavedHint: ["Tap the bookmark on an article to keep it for later.", "Πάτα το σημάδι αποθήκευσης σε ένα άρθρο για να το κρατήσεις για αργότερα."],
 
-  save: ["Save", "Αποθήκευση"],
-  unsave: ["Remove from Saved", "Αφαίρεση από τα Αποθηκευμένα"],
   remove: ["Remove", "Αφαίρεση"],
-  share: ["Share", "Κοινοποίηση"],
   less: ["Suggest Less", "Λιγότερα τέτοια"],
   lessDone: ["You'll see fewer stories like this.", "Θα βλέπεις λιγότερα τέτοια."],
 

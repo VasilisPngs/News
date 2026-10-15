@@ -307,10 +307,6 @@ a {
   stroke-width: 1.76;
 }
 
-.bar-btn .icon[data-icon="more"] {
-  --glyph: 26px;
-}
-
 .bar-btn:active {
   opacity: 0.55;
 }
@@ -1600,7 +1596,7 @@ h1 + .tiny {
   background: var(--fill);
 }
 
-.with-image .row-more {
+.with-image .row-save {
   grid-area: more;
   justify-self: end;
   margin: -6px -8px -6px 0;
@@ -1611,7 +1607,7 @@ h1 + .tiny {
   font-weight: 400;
 }
 
-.row-more {
+.row-save {
   flex: none;
   display: grid;
   place-items: center;
@@ -1626,7 +1622,14 @@ h1 + .tiny {
   transition: background var(--speed-fast) var(--ease);
 }
 
-.row-more:active,
-.row-more.menu-anchor {
+.row-save:active {
   background: var(--fill);
+}
+
+.row-save.on {
+  color: var(--accent);
+}
+
+.row-save.on .icon {
+  fill: currentColor;
 }

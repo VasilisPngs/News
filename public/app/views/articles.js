@@ -1,4 +1,4 @@
-import { el, icon, popMenu, swipeAction, toast } from "../dom.js";
+import { el, icon, swipeAction, toast } from "../dom.js";
 import { t, tn, ago } from "../i18n.js";
 import { markOpened, articleAction } from "../store.js";
 
@@ -17,24 +17,6 @@ async function act(article, action) {
     toast(t("actionFailed"));
     return false;
   }
-}
-
-async function share(article) {
-  try {
-    await navigator.share({ title: article.title, url: article.url });
-  } catch {}
-}
-
-function openMenu(article, mode, anchor) {
-  const items = [
-    article.saved
-      ? { icon: "bookmark", label: t("unsave"), onSelect: () => act(article, "unsave") }
-      : { icon: "bookmark", label: t("save"), onSelect: () => act(article, "save") }
-  ];
-  if (navigator.share) items.push({ icon: "share", label: t("share"), onSelect: () => share(article) });
-  const sections = [items];
-  if (mode === "foryou") sections.push([{ icon: "less", label: t("less"), onSelect: () => act(article, "less") }]);
-  popMenu(anchor, sections);
 }
 
 function thumbnail(article, row) {
@@ -62,7 +44,7 @@ function articleRow(article, mode) {
       el("span", { class: "tiny article-meta", text: meta(article) }),
       thumbnail(article, content)
     ]),
-    el("button", { class: "row-more", type: "button", onclick: (event) => openMenu(article, mode, event.currentTarget) }, icon("more"))
+    el("button", { class: article.saved ? "row-save on" : "row-save", type: "button", onclick: () => act(article, article.saved ? "unsave" : "save") }, icon("bookmark"))
   );
   if (mode === "foryou") return swipeAction(content, t("less"), () => act(article, "less"));
   if (mode === "saved") return swipeAction(content, t("remove"), () => act(article, "unsave"));
