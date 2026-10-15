@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import worker, { refresh, notify, prune, backfill, pick } from "../src/index.js";
+import worker, { refresh, notify, prune, backfill, pick, icons } from "../src/index.js";
 import { environment, network, api, rss, context, device, decrypt, ai } from "./helpers.mjs";
 
 const HOUR = 3600000;
@@ -190,6 +190,28 @@ test("source articles carry their picture, and older ones get it filled in on th
   assert.equal((await forYou(env))[0].image, "https://pics.example/1.jpg");
 });
 
+test("articles show their source's icon, found when the source is added or filled in by the cron", async () => {
+  const env = environment();
+  const now = Date.now();
+  const feed = `<rss><channel><title>Icons</title><link>https://icons.example/</link><item><title>One</title><link>https://icons.example/1</link><pubDate>${new Date(now - HOUR).toUTCString()}</pubDate></item></channel></rss>`;
+  network([
+    ["https://icons.example/", () => new Response('<html><head><link rel="alternate" type="application/rss+xml" href="/feed"><link rel="icon" sizes="64x64" href="/i64.png"></head></html>')],
+    ["https://icons.example/feed", () => new Response(feed)]
+  ]);
+  await api(worker, env, "/api/sources", { action: "add", url: "icons.example" });
+  assert.equal(rows(env, "SELECT icon FROM sources")[0].icon, "https://icons.example/i64.png");
+  for (const tab of ["sources", "foryou"]) assert.equal((await api(worker, env, "/api/feed", { tab })).json.items[0].icon, "https://icons.example/i64.png");
+  const id = (await api(worker, env, "/api/feed", { tab: "sources" })).json.items[0].id;
+  await api(worker, env, "/api/article", { id, action: "save" });
+  assert.equal((await api(worker, env, "/api/feed", { tab: "saved" })).json.items[0].icon, "https://icons.example/i64.png");
+  env.DB.sqlite.prepare("UPDATE sources SET icon = NULL").run();
+  assert.equal(await icons(env), 1);
+  assert.equal(rows(env, "SELECT icon FROM sources")[0].icon, "https://icons.example/i64.png");
+  assert.equal(await icons(env), 0);
+  await api(worker, env, "/api/sources", { action: "add", url: "https://icons.example/feed" });
+  assert.equal(rows(env, "SELECT COUNT(*) AS n FROM sources")[0].n, 1);
+});
+
 test("articles stored without a vector get one later and join For You", async () => {
   const env = environment({ AI: { run: async () => Promise.reject(new Error("down")) } });
   const now = Date.now();
@@ -231,6 +253,7 @@ test("topic feeds of the previous version and their unsaved articles go, saved o
   assert.deepEqual(state.json.topics, [{ id: "t1", name: "Apple" }]);
   assert.ok(!rows(env, "PRAGMA table_info(topics)").some((column) => column.name === "query_en"));
   assert.deepEqual(rows(env, "SELECT kind FROM feeds"), [{ kind: "source" }]);
+  assert.ok(rows(env, "PRAGMA table_info(sources)").some((column) => column.name === "icon"));
   assert.deepEqual(rows(env, "SELECT id FROM articles ORDER BY id").map((row) => row.id), ["g2", "x"]);
   const saved = (await api(worker, env, "/api/feed", { tab: "saved" })).json.items;
   assert.deepEqual(saved.map((item) => [item.title, item.source]), [["Saved", "Verge"]]);

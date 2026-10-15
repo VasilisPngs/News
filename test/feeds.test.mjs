@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { parseFeed, looksLikeFeed, normalizeSite, discover } from "../src/feeds.js";
+import { parseFeed, looksLikeFeed, normalizeSite, discover, siteIcon } from "../src/feeds.js";
 import { network, rss } from "./helpers.mjs";
 
 const NOW = Date.parse("2026-10-14T10:00:00Z");
@@ -83,7 +83,7 @@ test("feed detection and site addresses", () => {
 
 test("a site address leads to the feed its page links to", async () => {
   network([
-    ["https://blog.example/", () => new Response('<html><head><title>My Blog - Home</title><meta property="og:site_name" content="My Blog"><link rel="alternate" type="application/rss+xml" href="/feed.xml"></head></html>', { headers: { "content-type": "text/html" } })],
+    ["https://blog.example/", () => new Response('<html><head><title>My Blog - Home</title><meta property="og:site_name" content="My Blog"><link rel="alternate" type="application/rss+xml" href="/feed.xml"><link rel="apple-touch-icon" href="/apple.png"></head></html>', { headers: { "content-type": "text/html" } })],
     ["https://blog.example/feed.xml", () => new Response(rss([{ title: "Hello", link: "https://blog.example/hello", at: NOW }], "Blog Feed"))],
     ["https://other.example/", () => new Response('<html><head><link rel="alternate" type="application/atom+xml" href="https://other.example/atom"></head></html>')],
     ["https://other.example/atom", () => new Response(rss([{ title: "Hi", link: "https://other.example/hi", at: NOW }], "Other - RSS Feed"))]
@@ -91,8 +91,25 @@ test("a site address leads to the feed its page links to", async () => {
   const found = await discover("blog.example");
   assert.equal(found.feed, "https://blog.example/feed.xml");
   assert.equal(found.title, "My Blog");
-  assert.equal((await discover("other.example")).title, "Other");
+  assert.equal(found.icon, "https://blog.example/apple.png");
+  const other = await discover("other.example");
+  assert.equal(other.title, "Other");
+  assert.equal(other.icon, "https://other.example/favicon.ico");
   assert.equal(found.items.length, 1);
+});
+
+test("a site's icon is the smallest one sharp enough for a small mark, else its favicon", async () => {
+  network([
+    ["https://icons.example/", () => new Response('<html><head><link rel="icon" href="/favicon.ico"><link rel="icon" sizes="32x32" href="/i32.png"><link rel="mask-icon" href="/mask.svg"><link rel="apple-touch-icon" href="/apple.png"><link rel="icon" sizes="96x96" href="http://icons.example/i96.png"></head></html>')],
+    ["https://small.example/", () => new Response('<html><head><link rel="shortcut icon" sizes="32x32" href="/s32.png"><link rel="icon" sizes="16x16" href="/s16.png"></head></html>')],
+    ["https://plain.example/", () => new Response("<html><head><title>Plain</title></head></html>")],
+    ["https://feedonly.example/", () => new Response(rss([{ title: "Hi", link: "https://feedonly.example/hi", at: NOW }]))]
+  ]);
+  assert.equal(await siteIcon("https://icons.example/feed"), "https://icons.example/i96.png");
+  assert.equal(await siteIcon("https://small.example/"), "https://small.example/s32.png");
+  assert.equal(await siteIcon("https://plain.example/"), "https://plain.example/favicon.ico");
+  assert.equal(await siteIcon("https://feedonly.example/"), "https://feedonly.example/favicon.ico");
+  assert.equal(await siteIcon("https://down.example/news"), "https://down.example/favicon.ico");
 });
 
 test("without a linked feed the common paths are tried, and a site without one is refused", async () => {

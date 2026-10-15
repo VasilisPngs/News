@@ -2,10 +2,22 @@ import { el, icon, swipeAction, toast } from "../dom.js";
 import { t, tn, ago } from "../i18n.js";
 import { markOpened, articleAction } from "../store.js";
 
+function sourceIcon(article) {
+  if (!article.icon) return null;
+  return el("img", {
+    class: "source-icon",
+    src: article.icon,
+    alt: "",
+    decoding: "async",
+    referrerPolicy: "no-referrer",
+    onerror: (event) => event.currentTarget.remove()
+  });
+}
+
 function meta(article) {
   const parts = [article.source, ago(article.published)];
   if (article.coverage > 1) parts.push(tn(article.coverage, "source"));
-  return parts.filter(Boolean).join(" · ");
+  return el("span", { class: "tiny article-meta" }, [sourceIcon(article), el("span", { text: parts.filter(Boolean).join(" · ") })]);
 }
 
 async function act(article, action) {
@@ -41,7 +53,7 @@ function articleRow(article, mode) {
   content.append(
     el("a", { class: "article-link grow", href: article.url, target: "_blank", rel: "noopener noreferrer", onclick: () => markOpened(article) }, [
       el("span", { class: "article-title", text: article.title }),
-      el("span", { class: "tiny article-meta", text: meta(article) }),
+      meta(article),
       thumbnail(article, content)
     ]),
     el("button", { class: article.saved ? "row-save on" : "row-save", type: "button", onclick: () => act(article, article.saved ? "unsave" : "save") }, icon("bookmark"))

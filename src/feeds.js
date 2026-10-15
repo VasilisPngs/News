@@ -9,6 +9,8 @@ const AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 15_0) AppleWebKit/605.1.15
 const ENTITIES = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " " };
 const FEED_TYPES = /application\/(rss|atom)\+xml|application\/feed\+json/i;
 const GUESSES = ["/feed", "/rss", "/rss.xml", "/feed.xml", "/atom.xml", "/index.xml", "/feed/"];
+const ICON_REL = /(^|\s)(icon|apple-touch-icon(-precomposed)?)(\s|$)/;
+const ICON_MIN = 48;
 
 function entities(value) {
   return value.replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, (match, code) => {
@@ -145,15 +147,38 @@ export async function download(url, headers = {}) {
   return { status: response.status, text, url: response.url || url, etag: response.headers.get("etag"), modified: response.headers.get("last-modified") };
 }
 
+const headOf = (html) => html.slice(0, Math.max(html.search(/<\/head>/i), 0) || 200000);
+
 function alternates(html, base) {
-  const head = html.slice(0, Math.max(html.search(/<\/head>/i), 0) || 200000);
   const found = [];
-  for (const element of head.match(/<link\b[^>]*>/gi) || []) {
+  for (const element of headOf(html).match(/<link\b[^>]*>/gi) || []) {
     if (!/\srel\s*=\s*["']?[^"'>]*alternate/i.test(element) || !FEED_TYPES.test(attribute(element, "type"))) continue;
     const href = absolute(attribute(element, "href"), base);
     if (href) found.push(href);
   }
   return found;
+}
+
+function pickIcon(html, base) {
+  const found = [];
+  for (const element of headOf(html).match(/<link\b[^>]*>/gi) || []) {
+    const rel = attribute(element, "rel").toLowerCase();
+    const href = ICON_REL.test(rel) ? absolute(attribute(element, "href"), base) : "";
+    if (href) found.push({ href, size: parseInt(attribute(element, "sizes"), 10) || (rel.startsWith("apple") ? 180 : 0) });
+  }
+  const fitting = found.filter((entry) => entry.size >= ICON_MIN).sort((a, b) => a.size - b.size);
+  const largest = found.filter((entry) => entry.size).sort((a, b) => b.size - a.size);
+  const url = (fitting[0] || largest[0] || found[0] || { href: new URL("/favicon.ico", base).href }).href.replace(/^http:/, "https:");
+  return url.length <= 1000 ? url : new URL("/favicon.ico", base).href;
+}
+
+export async function siteIcon(site) {
+  const home = new URL("/", site).href;
+  try {
+    const page = await download(home);
+    if (page.status === 200 && !looksLikeFeed(page.text)) return pickIcon(page.text, page.url);
+  } catch {}
+  return new URL("/favicon.ico", home).href;
 }
 
 export function normalizeSite(input) {
@@ -201,9 +226,10 @@ export async function discover(input) {
   for (const guess of GUESSES) candidates.push(`${origin}${guess}`);
   const named = page.status === 200 ? siteName(page.text) : "";
   const pageTitle = page.status === 200 ? clean(tag(page.text.slice(0, 200000), "title")) : "";
+  const icon = page.status === 200 ? pickIcon(page.text, page.url) : null;
   for (const candidate of [...new Set(candidates)].slice(0, 8)) {
     const found = await tryFeed(candidate);
-    if (found) return { ...found, title: named || tidy(found.title) || pageTitle, site: found.site || origin };
+    if (found) return { ...found, title: named || tidy(found.title) || pageTitle, site: found.site || origin, icon };
   }
   return null;
 }

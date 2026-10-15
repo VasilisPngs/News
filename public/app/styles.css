@@ -1573,6 +1573,21 @@ h1 + .tiny {
   padding-inline-end: var(--pad);
 }
 
+.article-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.source-icon {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  object-fit: cover;
+}
+
 .with-image .article-link {
   display: contents;
 }

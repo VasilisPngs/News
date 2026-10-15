@@ -1,5 +1,5 @@
 import { checkAccess } from "./access.js";
-import { parseFeed, download, discover, looksLikeFeed } from "./feeds.js";
+import { parseFeed, download, discover, looksLikeFeed, siteIcon } from "./feeds.js";
 import { quantize, encodeVector, decodeVector, encodeProfile, decodeProfile, learn, affinity, tokens, sameStory } from "./rank.js";
 import { createKey, publicKey, pushEndpoint, keyLength, sendPush } from "./push.js";
 
@@ -27,7 +27,7 @@ const WEIGHTS = { open: 1, save: 1, less: -1.5 };
 
 const SCHEMA = [
   "CREATE TABLE IF NOT EXISTS topics (id TEXT PRIMARY KEY, name TEXT NOT NULL, vector TEXT, position INTEGER NOT NULL, created_at INTEGER NOT NULL)",
-  "CREATE TABLE IF NOT EXISTS sources (id TEXT PRIMARY KEY, title TEXT NOT NULL, site TEXT NOT NULL, feed TEXT NOT NULL UNIQUE, position INTEGER NOT NULL, created_at INTEGER NOT NULL)",
+  "CREATE TABLE IF NOT EXISTS sources (id TEXT PRIMARY KEY, title TEXT NOT NULL, site TEXT NOT NULL, feed TEXT NOT NULL UNIQUE, position INTEGER NOT NULL, created_at INTEGER NOT NULL, icon TEXT)",
   "CREATE TABLE IF NOT EXISTS feeds (url TEXT PRIMARY KEY, owner TEXT NOT NULL, kind TEXT NOT NULL, lang TEXT, fetched_at INTEGER NOT NULL DEFAULT 0, etag TEXT, modified TEXT, failures INTEGER NOT NULL DEFAULT 0)",
   "CREATE INDEX IF NOT EXISTS feeds_owner ON feeds (owner)",
   "CREATE TABLE IF NOT EXISTS articles (id TEXT PRIMARY KEY, kind TEXT NOT NULL, owner TEXT NOT NULL, story TEXT NOT NULL, title TEXT NOT NULL, url TEXT NOT NULL, source TEXT NOT NULL, lang TEXT, published_at INTEGER NOT NULL, seen_at INTEGER NOT NULL, tokens TEXT NOT NULL, vector TEXT, affinity REAL NOT NULL DEFAULT 0, opened_at INTEGER, hidden_at INTEGER, saved_at INTEGER, notified_at INTEGER, image TEXT)",
@@ -77,9 +77,10 @@ function prepare(env) {
 }
 
 async function upgrade(env) {
-  const [articles, topics] = await Promise.all([env.DB.prepare("PRAGMA table_info(articles)").all(), env.DB.prepare("PRAGMA table_info(topics)").all()]);
+  const [articles, topics, sources] = await Promise.all(["articles", "topics", "sources"].map((table) => env.DB.prepare(`PRAGMA table_info(${table})`).all()));
   const steps = [];
   if (!articles.results.some((column) => column.name === "image")) steps.push("ALTER TABLE articles ADD COLUMN image TEXT");
+  if (!sources.results.some((column) => column.name === "icon")) steps.push("ALTER TABLE sources ADD COLUMN icon TEXT");
   if (topics.results.some((column) => column.name === "query_en")) {
     steps.push("ALTER TABLE topics DROP COLUMN query_en", "DELETE FROM feeds WHERE kind = 'topic'", "DELETE FROM articles WHERE kind = 'topic' AND saved_at IS NULL");
   }
@@ -194,16 +195,17 @@ async function sourcesRoute(request, env, ctx) {
   const site = found.site || new URL(found.feed).origin;
   const title = cleanName(found.title) || new URL(site).hostname.replace(/^www\./, "");
   await env.DB.batch([
-    env.DB.prepare("INSERT INTO sources (id, title, site, feed, position, created_at) VALUES (?1, ?2, ?3, ?4, (SELECT COALESCE(MAX(position) + 1, 0) FROM sources), ?5)").bind(
+    env.DB.prepare("INSERT INTO sources (id, title, site, feed, position, created_at, icon) VALUES (?1, ?2, ?3, ?4, (SELECT COALESCE(MAX(position) + 1, 0) FROM sources), ?5, ?6)").bind(
       created,
       title,
       site,
       found.feed,
-      Date.now()
+      Date.now(),
+      found.icon || null
     ),
     addFeed(env, found.feed, created)
   ]);
-  background(env, ctx, refresh(env, Date.now(), { owner: created }), "/sources");
+  background(env, ctx, refresh(env, Date.now(), { owner: created }).then(() => icons(env)), "/sources");
   return json(await state(env));
 }
 
@@ -216,7 +218,8 @@ const item = (row) => ({
   opened: Boolean(row.opened_at),
   saved: Boolean(row.saved_at),
   coverage: row.coverage || 1,
-  image: row.image || null
+  image: row.image || null,
+  icon: row.icon || null
 });
 
 export function pick(rows, now, limit = FOR_YOU_LIMIT) {
@@ -235,22 +238,22 @@ async function feedRoute(request, env) {
   const now = Date.now();
   if (body.tab === "saved") {
     const rows = await env.DB.prepare(
-      "SELECT a.id, a.title, a.url, COALESCE(s.title, a.source) AS source, a.published_at, a.opened_at, a.saved_at, a.image FROM articles a LEFT JOIN sources s ON s.id = a.owner WHERE a.saved_at IS NOT NULL ORDER BY a.saved_at DESC"
+      "SELECT a.id, a.title, a.url, COALESCE(s.title, a.source) AS source, s.icon, a.published_at, a.opened_at, a.saved_at, a.image FROM articles a LEFT JOIN sources s ON s.id = a.owner WHERE a.saved_at IS NOT NULL ORDER BY a.saved_at DESC"
     ).all();
     return json({ items: rows.results.map(item) });
   }
   if (body.tab === "sources") {
     const owner = typeof body.source === "string" && body.source ? body.source : null;
     const rows = await env.DB.prepare(
-      `SELECT a.id, a.title, a.url, s.title AS source, a.published_at, a.opened_at, a.saved_at, a.image FROM articles a JOIN sources s ON s.id = a.owner${owner ? " WHERE a.owner = ?2" : ""} ORDER BY a.published_at DESC LIMIT ?1`
+      `SELECT a.id, a.title, a.url, s.title AS source, s.icon, a.published_at, a.opened_at, a.saved_at, a.image FROM articles a JOIN sources s ON s.id = a.owner${owner ? " WHERE a.owner = ?2" : ""} ORDER BY a.published_at DESC LIMIT ?1`
     )
       .bind(...(owner ? [SOURCES_LIMIT, owner] : [SOURCES_LIMIT]))
       .all();
     return json({ items: rows.results.map(item) });
   }
   const rows = await env.DB.prepare(
-    `SELECT id, title, url, source, published_at, opened AS opened_at, saved AS saved_at, coverage, image, affinity FROM (
-      SELECT a.id, a.title, a.url, s.title AS source, a.published_at, a.affinity, a.image,
+    `SELECT id, title, url, source, icon, published_at, opened AS opened_at, saved AS saved_at, coverage, image, affinity FROM (
+      SELECT a.id, a.title, a.url, s.title AS source, s.icon, a.published_at, a.affinity, a.image,
         MAX(a.opened_at) OVER same AS opened, MAX(a.saved_at) OVER same AS saved,
         ROW_NUMBER() OVER (PARTITION BY a.story ORDER BY a.affinity DESC, a.published_at DESC) AS place,
         (SELECT COUNT(DISTINCT b.owner) FROM articles b WHERE b.story = a.story) AS coverage
@@ -401,6 +404,12 @@ export async function backfill(env, now, limit = EMBED_BATCH) {
       env.DB.prepare("UPDATE articles SET story = ?2, tokens = ?3, vector = ?4, affinity = ?5 WHERE id = ?1").bind(row.id, scored[index].story, scored[index].words, scored[index].vector, scored[index].affinity)
     )
   );
+  return rows.length;
+}
+
+export async function icons(env, limit = 2) {
+  const rows = (await env.DB.prepare("SELECT id, site FROM sources WHERE icon IS NULL LIMIT ?1").bind(limit).all()).results;
+  for (const row of rows) await env.DB.prepare("UPDATE sources SET icon = ?2 WHERE id = ?1").bind(row.id, await siteIcon(row.site)).run();
   return rows.length;
 }
 
@@ -590,6 +599,7 @@ export default {
         const { touched } = await refresh(env, now);
         await notify(env, now, touched);
         await backfill(env, now);
+        await icons(env);
         if (new Date(now).getUTCMinutes() < 2) {
           await rescore(env, now);
           await prune(env, now);
