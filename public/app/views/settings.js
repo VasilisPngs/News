@@ -41,7 +41,7 @@ export function renderSettings(container) {
     el("h1", { text: t("settingsTitle") }),
     el("section", { class: "group" }, [
       el("h2", { text: t("content") }),
-      el("div", { class: "card flush" }, el("div", { class: "list" }, [link("/settings/topics", t("topics"), count(topics.length)), link("/settings/sources", t("sources"), count(sources.length))]))
+      el("div", { class: "card flush" }, el("div", { class: "list" }, [link("/settings/topics", t("topics"), count(topics.length)), link("/settings/following", t("sources"), count(sources.length))]))
     ])
   );
 

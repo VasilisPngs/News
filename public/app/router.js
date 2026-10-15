@@ -1,10 +1,10 @@
 const ROUTES = [
   { pattern: /^\/$/, name: "foryou", tab: "/", params: () => ({}) },
-  { pattern: /^\/sources$/, name: "sources", tab: "/sources", params: () => ({}) },
+  { pattern: /^\/following$/, name: "sources", tab: "/following", params: () => ({}) },
   { pattern: /^\/saved$/, name: "saved", tab: "/saved", params: () => ({}) },
   { pattern: /^\/settings$/, name: "settings", tab: "/settings", params: () => ({}) },
   { pattern: /^\/settings\/topics$/, name: "topics", tab: "/settings", params: () => ({}) },
-  { pattern: /^\/settings\/sources$/, name: "sourceList", tab: "/settings", params: () => ({}) }
+  { pattern: /^\/settings\/following$/, name: "sourceList", tab: "/settings", params: () => ({}) }
 ];
 
 const entries = [];
@@ -76,7 +76,7 @@ function openTab(root) {
 export function startRouter(fn) {
   renderer = fn;
   index = stateIndex(history.state);
-  history.replaceState({ index }, "");
+  history.replaceState({ index }, "", ROUTES.some((route) => route.pattern.test(location.pathname)) ? location.href : "/");
   remember();
   addEventListener("popstate", (event) => {
     index = stateIndex(event.state);

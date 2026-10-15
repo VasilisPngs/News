@@ -31,7 +31,7 @@ function sourceChips(sources, active) {
       text: label,
       onclick: () => {
         writeLocal(SOURCE_KEY, id);
-        navigate("/sources");
+        navigate("/following");
       }
     });
   return chipStrip([chip(null, t("all")), ...sources.map((source) => chip(source.id, source.title))]);
