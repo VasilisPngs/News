@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { parseFeed, looksLikeFeed, normalizeSite, discover, siteIcon } from "../src/feeds.js";
+import { parseFeed, looksLikeFeed, normalizeSite, discover, siteIcon, pageImage } from "../src/feeds.js";
 import { network, rss } from "./helpers.mjs";
 
 const NOW = Date.parse("2026-10-14T10:00:00Z");
@@ -110,6 +110,18 @@ test("a site's icon is the smallest one sharp enough for a small mark, else its 
   assert.equal(await siteIcon("https://plain.example/"), "https://plain.example/favicon.ico");
   assert.equal(await siteIcon("https://feedonly.example/"), "https://feedonly.example/favicon.ico");
   assert.equal(await siteIcon("https://down.example/news"), "https://down.example/favicon.ico");
+});
+
+test("an article page gives its share picture when the feed has none", async () => {
+  network([
+    ["https://a.example/og", () => new Response('<html><head><meta content="/pics/og.png" property="og:image"><meta property="og:image" content="/pics/second.png"></head></html>')],
+    ["https://a.example/tw", () => new Response('<html><head><meta name="twitter:image" content="http://a.example/tw.jpg"></head></html>')],
+    ["https://a.example/none", () => new Response("<html><head><title>None</title></head></html>")]
+  ]);
+  assert.equal(await pageImage("https://a.example/og"), "https://a.example/pics/og.png");
+  assert.equal(await pageImage("https://a.example/tw"), "https://a.example/tw.jpg");
+  assert.equal(await pageImage("https://a.example/none"), "");
+  assert.equal(await pageImage("https://a.example/missing"), "");
 });
 
 test("without a linked feed the common paths are tried, and a site without one is refused", async () => {

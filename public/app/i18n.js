@@ -53,7 +53,7 @@ const STRINGS = {
   settingsTitle: ["Settings", "Ρυθμίσεις"],
   content: ["Content", "Περιεχόμενο"],
   topics: ["Topics", "Θέματα"],
-  sources: ["Sources", "Πηγές"],
+  sources: ["Following", "Ακολουθείτε"],
   deleteTopic: ["Delete topic", "Διαγραφή θέματος"],
   deleteTopicBody: ["For You stops picking articles for it.", "Το «Για εσάς» σταματά να διαλέγει άρθρα γι' αυτό."],
   deleteSource: ["Delete source", "Διαγραφή πηγής"],

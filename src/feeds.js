@@ -172,6 +172,21 @@ function pickIcon(html, base) {
   return url.length <= 1000 ? url : new URL("/favicon.ico", base).href;
 }
 
+const PAGE_IMAGE = /\s(property|name)\s*=\s*["'](og:image(:secure_url)?|twitter:image(:src)?)["']/i;
+
+export async function pageImage(url) {
+  try {
+    const page = await download(url);
+    if (page.status !== 200) return "";
+    for (const element of headOf(page.text).match(/<meta\b[^>]*>/gi) || []) {
+      if (!PAGE_IMAGE.test(element)) continue;
+      const found = absolute(attribute(element, "content"), page.url).replace(/^http:/, "https:");
+      if (found && found.length <= 1000) return found;
+    }
+  } catch {}
+  return "";
+}
+
 export async function siteIcon(site) {
   const home = new URL("/", site).href;
   try {

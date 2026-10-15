@@ -1201,7 +1201,7 @@ body:has(.sheet-backdrop[open]:not(.closing)) .toast-host {
   .tabbar {
     --bottom-bar: 0;
     --tab-lens: var(--fill);
-    top: var(--topbar);
+    top: 0;
     left: 0;
     right: auto;
     bottom: 0;
@@ -1211,12 +1211,16 @@ body:has(.sheet-backdrop[open]:not(.closing)) .toast-host {
     display: flex;
     flex-direction: column;
     gap: 4px;
-    background: transparent;
+    background: var(--bg);
     backdrop-filter: none;
     border: 0;
     border-radius: 0;
     box-shadow: none;
-    padding: 16px 16px 0;
+    padding: calc(var(--topbar) + 16px) 16px 0;
+  }
+
+  .bar-lead {
+    margin-inline-start: var(--rail);
   }
 
   .tab {

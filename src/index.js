@@ -1,5 +1,5 @@
 import { checkAccess } from "./access.js";
-import { parseFeed, download, discover, looksLikeFeed, siteIcon } from "./feeds.js";
+import { parseFeed, download, discover, looksLikeFeed, siteIcon, pageImage } from "./feeds.js";
 import { quantize, encodeVector, decodeVector, encodeProfile, decodeProfile, learn, affinity, tokens, sameStory } from "./rank.js";
 import { createKey, publicKey, pushEndpoint, keyLength, sendPush } from "./push.js";
 
@@ -11,6 +11,7 @@ const MAX_BACKOFF = 4;
 const WINDOW_MS = 48 * 3600000;
 const STORY_SCAN = 600;
 const RETENTION_MS = 14 * 86400000;
+const POSTERS_PER_RUN = 3;
 const RESCORE_LIMIT = 400;
 const ERROR_RETENTION_MS = 30 * 86400000;
 const FOR_YOU_LIMIT = 60;
@@ -205,7 +206,12 @@ async function sourcesRoute(request, env, ctx) {
     ),
     addFeed(env, found.feed, created)
   ]);
-  background(env, ctx, refresh(env, Date.now(), { owner: created }).then(() => icons(env)), "/sources");
+  background(
+    env,
+    ctx,
+    refresh(env, Date.now(), { owner: created }).then(() => Promise.all([icons(env), posters(env, Date.now())])),
+    "/sources"
+  );
   return json(await state(env));
 }
 
@@ -407,6 +413,13 @@ export async function backfill(env, now, limit = EMBED_BATCH) {
   return rows.length;
 }
 
+export async function posters(env, now, limit = POSTERS_PER_RUN) {
+  const rows = (await env.DB.prepare("SELECT id, url FROM articles WHERE image IS NULL AND seen_at > ?1 ORDER BY published_at DESC LIMIT ?2").bind(now - RETENTION_MS, limit).all()).results;
+  const found = await Promise.all(rows.map((row) => pageImage(row.url)));
+  if (rows.length) await env.DB.batch(rows.map((row, index) => env.DB.prepare("UPDATE articles SET image = ?2 WHERE id = ?1 AND image IS NULL").bind(row.id, found[index])));
+  return rows.length;
+}
+
 export async function icons(env, limit = 2) {
   const rows = (await env.DB.prepare("SELECT id, site FROM sources WHERE icon IS NULL LIMIT ?1").bind(limit).all()).results;
   for (const row of rows) await env.DB.prepare("UPDATE sources SET icon = ?2 WHERE id = ?1").bind(row.id, await siteIcon(row.site)).run();
@@ -478,7 +491,7 @@ export async function refresh(env, now, { owner = null, limit = FEEDS_PER_RUN } 
   }
   const additions = [...found.values()].filter((entry) => !known.has(entry.id));
   for (const entry of found.values()) {
-    if (known.has(entry.id) && entry.item.image) updates.push(env.DB.prepare("UPDATE articles SET image = ?2 WHERE id = ?1 AND image IS NULL").bind(entry.id, entry.item.image));
+    if (known.has(entry.id) && entry.item.image) updates.push(env.DB.prepare("UPDATE articles SET image = ?2 WHERE id = ?1 AND (image IS NULL OR image = '')").bind(entry.id, entry.item.image));
   }
   const touched = additions.length ? await ingest(env, now, additions) : new Set();
   await env.DB.batch(updates);
@@ -600,6 +613,7 @@ export default {
         await notify(env, now, touched);
         await backfill(env, now);
         await icons(env);
+        await posters(env, now);
         if (new Date(now).getUTCMinutes() < 2) {
           await rescore(env, now);
           await prune(env, now);

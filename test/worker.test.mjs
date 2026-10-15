@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import worker, { refresh, notify, prune, backfill, pick, icons } from "../src/index.js";
+import worker, { refresh, notify, prune, backfill, pick, icons, posters } from "../src/index.js";
 import { environment, network, api, rss, context, device, decrypt, ai } from "./helpers.mjs";
 
 const HOUR = 3600000;
@@ -210,6 +210,30 @@ test("articles show their source's icon, found when the source is added or fille
   assert.equal(await icons(env), 0);
   await api(worker, env, "/api/sources", { action: "add", url: "https://icons.example/feed" });
   assert.equal(rows(env, "SELECT COUNT(*) AS n FROM sources")[0].n, 1);
+});
+
+test("an article whose feed has no picture takes its page's share picture, once", async () => {
+  const env = environment();
+  const now = Date.now();
+  let feedImage = "";
+  const item = (n) => `<item><title>Story ${n}</title><link>https://plain.example/${n}</link><pubDate>${new Date(now - n * HOUR).toUTCString()}</pubDate>${n === 1 ? feedImage : ""}</item>`;
+  const calls = network([
+    ["https://plain.example/", () => new Response(`<rss><channel><title>Plain</title><link>https://plain.example/</link>${item(1)}${item(2)}</channel></rss>`)],
+    ["https://plain.example/1", () => new Response('<html><head><meta property="og:image" content="https://plain.example/1.png"></head></html>')],
+    ["https://plain.example/2", () => new Response("<html><head></head></html>")]
+  ]);
+  await api(worker, env, "/api/sources", { action: "add", url: "plain.example" });
+  const images = () => Object.fromEntries(rows(env, "SELECT title, image FROM articles").map((row) => [row.title, row.image]));
+  assert.deepEqual(images(), { "Story 1": "https://plain.example/1.png", "Story 2": "" });
+  const items = (await api(worker, env, "/api/feed", { tab: "sources" })).json.items;
+  assert.deepEqual(items.map((entry) => entry.image), ["https://plain.example/1.png", null]);
+  const pages = calls.filter((request) => /\/[12]$/.test(request.url)).length;
+  assert.equal(await posters(env, now), 0);
+  assert.equal(calls.filter((request) => /\/[12]$/.test(request.url)).length, pages);
+  env.DB.sqlite.prepare("UPDATE articles SET image = '' WHERE title = 'Story 1'").run();
+  feedImage = '<enclosure url="https://plain.example/feed1.jpg" type="image/jpeg"/>';
+  await refresh(env, now + 21 * 60000);
+  assert.equal(images()["Story 1"], "https://plain.example/feed1.jpg");
 });
 
 test("articles stored without a vector get one later and join For You", async () => {
