@@ -5,7 +5,7 @@ const LANGUAGES = ["en", "el"];
 
 const STRINGS = {
   tabForYou: ["For You", "Για εσάς"],
-  tabSources: ["Sources", "Πηγές"],
+  tabSources: ["Following", "Ακολουθείτε"],
   tabSaved: ["Saved", "Αποθηκευμένα"],
   tabSettings: ["Settings", "Ρυθμίσεις"],
 
@@ -31,7 +31,7 @@ const STRINGS = {
   searching: ["Finding articles", "Ψάχνω άρθρα"],
   searchingHint: ["Picking from your sources what matches your topics.", "Διαλέγω από τις πηγές σου ό,τι ταιριάζει στα θέματά σου."],
 
-  sourcesTitle: ["Sources", "Πηγές"],
+  sourcesTitle: ["Following", "Ακολουθείτε"],
   newSource: ["New source", "Νέα πηγή"],
   sourcePlaceholder: ["Site address, e.g. theverge.com", "Διεύθυνση site, π.χ. gazzetta.gr"],
   sourceSearching: ["Looking for the site's articles…", "Ψάχνω τα άρθρα του site…"],
@@ -57,7 +57,7 @@ const STRINGS = {
   deleteTopic: ["Delete topic", "Διαγραφή θέματος"],
   deleteTopicBody: ["For You stops picking articles for it.", "Το «Για εσάς» σταματά να διαλέγει άρθρα γι' αυτό."],
   deleteSource: ["Delete source", "Διαγραφή πηγής"],
-  deleteSourceBody: ["Its articles leave Sources and For You. Saved ones stay.", "Τα άρθρα της φεύγουν από τις Πηγές και το «Για εσάς». Τα αποθηκευμένα μένουν."],
+  deleteSourceBody: ["Its articles leave Following and For You. Saved ones stay.", "Τα άρθρα της φεύγουν από το «Ακολουθείτε» και το «Για εσάς». Τα αποθηκευμένα μένουν."],
   notifications: ["Notifications", "Ειδοποιήσεις"],
   importantNews: ["Important news", "Σημαντικές ειδήσεις"],
   importantNewsNote: ["Up to 3 a day, only when many of your sources cover something in your topics.", "Έως 3 την ημέρα, μόνο όταν πολλές από τις πηγές σου γράφουν για κάτι στα θέματά σου."],
