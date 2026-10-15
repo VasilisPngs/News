@@ -23,6 +23,7 @@ const EXPLORE_EVERY = 5;
 const VIEW_PENALTY = 0.12;
 const VIEW_CAP = 6;
 const VIEW_GAP_MS = 30 * 60000;
+const PULL_STALE_MS = 2 * 60000;
 const SAME_SOURCE = 0.08;
 const SAME_WORDS = 0.12;
 const VARIETY_WINDOW = 6;
@@ -461,6 +462,14 @@ async function seenRoute(request, env) {
   return json({ ok: true });
 }
 
+async function refreshRoute(request, env) {
+  const body = await readJson(request);
+  const now = Date.now();
+  const { added } = await refresh(env, now, { hidden: body.tab === "foryou" ? 1 : 0 });
+  await posters(env, now);
+  return json({ added });
+}
+
 async function pushRoute(request, env) {
   const body = await readJson(request);
   if (body.action === "unsubscribe") {
@@ -625,11 +634,15 @@ function conditional(feed) {
   return headers;
 }
 
-export async function refresh(env, now, { owner = null, limit = FEEDS_PER_RUN } = {}) {
+export async function refresh(env, now, { owner = null, limit = FEEDS_PER_RUN, hidden = null } = {}) {
   await prepare(env);
   const due = owner
     ? await env.DB.prepare("SELECT * FROM feeds WHERE owner = ?1").bind(owner).all()
-    : await env.DB.prepare("SELECT * FROM feeds WHERE fetched_at + ?2 * (1 << MIN(failures, ?3)) <= ?1 ORDER BY fetched_at LIMIT ?4").bind(now, FEED_INTERVAL_MS, MAX_BACKOFF, limit).all();
+    : hidden !== null
+      ? await env.DB.prepare("SELECT f.* FROM feeds f JOIN sources s ON s.id = f.owner WHERE s.hidden = ?1 AND f.failures = 0 AND f.fetched_at <= ?2 ORDER BY f.fetched_at LIMIT ?3")
+          .bind(hidden, now - PULL_STALE_MS, limit)
+          .all()
+      : await env.DB.prepare("SELECT * FROM feeds WHERE fetched_at + ?2 * (1 << MIN(failures, ?3)) <= ?1 ORDER BY fetched_at LIMIT ?4").bind(now, FEED_INTERVAL_MS, MAX_BACKOFF, limit).all();
   const feeds = due.results;
   if (feeds.length === 0) return { added: 0, touched: new Set() };
   const pages = await Promise.all(feeds.map((feed) => download(feed.url, conditional(feed)).catch((error) => ({ status: 0, text: "", error: String(error && error.message) }))));
@@ -753,6 +766,7 @@ const ROUTES = {
   "/api/article": articleRoute,
   "/api/push": pushRoute,
   "/api/seen": seenRoute,
+  "/api/refresh": refreshRoute,
   "/api/report": reportRoute
 };
 

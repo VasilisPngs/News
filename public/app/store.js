@@ -172,6 +172,11 @@ function beacon(payload, path = "/api/article") {
 
 export const markSeen = (ids) => beacon({ ids }, "/api/seen");
 
+export async function pullRefresh(tab, source) {
+  await post("/api/refresh", { tab }).catch(() => {});
+  await Promise.all([loadFeed(tab, null, true).catch(() => {}), tab === "sources" && source ? loadFeed(tab, source, true).catch(() => {}) : null]);
+}
+
 export function markOpened(article) {
   patch((items, key) => (key === "foryou" ? items.filter((item) => item.id !== article.id) : items.map((item) => (item.id === article.id ? { ...item, opened: true } : item))));
   beacon({ id: article.id, action: "open" });

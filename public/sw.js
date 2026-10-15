@@ -1,4 +1,4 @@
-const VERSION = "v12";
+const VERSION = "v13";
 const CACHE = `news-${VERSION}`;
 
 const SHELL = [
@@ -14,6 +14,7 @@ const SHELL = [
   "/app/i18n.js",
   "/app/theme.js",
   "/app/push.js",
+  "/app/pull.js",
   "/app/report.js",
   "/app/views/articles.js",
   "/app/views/foryou.js",

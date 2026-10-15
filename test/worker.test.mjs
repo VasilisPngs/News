@@ -407,6 +407,22 @@ test("topic feeds of the previous version and their unsaved articles go, saved o
   assert.deepEqual(saved.map((item) => [item.title, item.source]), [["Saved", "Verge"]]);
 });
 
+test("pulling to refresh fetches the stale feeds of that tab only, and not again within two minutes", async () => {
+  const env = pooled();
+  const now = Date.now();
+  await setup(env, now, { follow: ["followed.example"], extra: followed(now) });
+  env.DB.sqlite.prepare("UPDATE feeds SET fetched_at = ?").run(now - 3 * 60000);
+  const feedsFetched = (calls) => calls.filter((request) => new URL(request.url).pathname === "/").map((request) => new URL(request.url).host).sort();
+  let calls = sites(now, followed(now));
+  assert.deepEqual((await api(worker, env, "/api/refresh", { tab: "sources" })).json, { added: 0 });
+  assert.deepEqual(feedsFetched(calls), ["followed.example"]);
+  calls = sites(now, followed(now));
+  await api(worker, env, "/api/refresh", { tab: "sources" });
+  assert.deepEqual(feedsFetched(calls), []);
+  await api(worker, env, "/api/refresh", { tab: "foryou" });
+  assert.deepEqual(feedsFetched(calls), ["gazzetta.example", "sport.example"]);
+});
+
 test("a site without any feed is refused", async () => {
   const env = environment();
   network([["https://none.example/", () => new Response("<html><head><title>None</title></head></html>")]]);

@@ -1060,6 +1060,38 @@ html.locked {
   overscroll-behavior: none;
 }
 
+.pull {
+  position: fixed;
+  top: calc(max(env(safe-area-inset-top), 8px) + (var(--control) - 24px) / 2);
+  left: 50%;
+  z-index: 31;
+  width: 24px;
+  height: 24px;
+  border: 2.5px solid var(--muted);
+  border-top-color: transparent;
+  border-radius: 50%;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(-50%);
+  transition: opacity var(--speed) var(--ease), border-color var(--speed) var(--ease);
+}
+
+.pull.armed,
+.pull.busy {
+  border-color: var(--accent);
+  border-top-color: transparent;
+}
+
+.pull.busy {
+  opacity: 1 !important;
+  animation: pull-spin 0.8s linear infinite;
+}
+
+@keyframes pull-spin {
+  from { transform: translateX(-50%) rotate(0deg); }
+  to { transform: translateX(-50%) rotate(360deg); }
+}
+
 .sheet {
   position: relative;
   width: min(560px, 100%);

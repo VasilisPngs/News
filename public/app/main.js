@@ -1,6 +1,6 @@
 import { el } from "./dom.js";
 import { startShell, scrollViewTop, watchBars, placeLens } from "./shell.js";
-import { storeEvents, status, loadState, loadFeed, finishDwell } from "./store.js";
+import { storeEvents, status, loadState, loadFeed, finishDwell, pullRefresh } from "./store.js";
 import { currentRoute, navigation, startRouter } from "./router.js";
 import { renderForYou } from "./views/foryou.js";
 import { renderSources } from "./views/sources.js";
@@ -10,6 +10,7 @@ import { t, applyLanguage, i18nEvents } from "./i18n.js";
 import { applyTheme } from "./theme.js";
 import { loadPush } from "./push.js";
 import { readLocal } from "./storage.js";
+import { setPull } from "./pull.js";
 
 const view = document.getElementById("view");
 const barLead = document.getElementById("bar-lead");
@@ -72,6 +73,7 @@ function render() {
     delete view.dataset.title;
     delete view.dataset.editing;
     VIEWS[route.name](view, route.params);
+    setPull(route.name === "foryou" || route.name === "sources" ? () => pullRefresh(route.name, readLocal("news.source")) : null);
     if (changed) {
       lastRouteKey = key;
       lastTab = route.tab;
