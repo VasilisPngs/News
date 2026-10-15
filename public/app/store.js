@@ -82,6 +82,10 @@ export function feed(tab, source = null) {
   return feeds.get(key) || null;
 }
 
+const failed = new Set();
+
+export const feedFailed = (tab, source = null) => failed.has(feedKey(tab, source));
+
 export function loadFeed(tab, source = null, force = false) {
   const key = feedKey(tab, source);
   const current = feed(tab, source);
@@ -90,10 +94,18 @@ export function loadFeed(tab, source = null, force = false) {
   const request = post("/api/feed", { tab, source })
     .then(({ items }) => {
       const next = { items: items || [], at: Date.now(), fresh: true };
+      failed.delete(key);
       feeds.set(key, next);
       writeJson(`news.feed.${key}`, { items: next.items, at: next.at });
       changed();
       return next;
+    })
+    .catch((error) => {
+      if (!failed.has(key)) {
+        failed.add(key);
+        if (!feeds.has(key)) changed();
+      }
+      throw error;
     })
     .finally(() => loading.delete(key));
   loading.set(key, request);

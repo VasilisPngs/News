@@ -1,6 +1,6 @@
-import { el, icon, emptyState, promptSheet, toast } from "../dom.js";
+import { el, icon, emptyState, promptSheet, toast, spinner } from "../dom.js";
 import { t, categories } from "../i18n.js";
-import { appState, feed, loadFeed, addTopic, markSeen } from "../store.js";
+import { appState, feed, loadFeed, addTopic, markSeen, feedFailed } from "../store.js";
 import { articleList } from "./articles.js";
 
 const barActions = document.getElementById("bar-actions");
@@ -94,6 +94,10 @@ export function renderForYou(container) {
   }
   loadFeed("foryou").catch(() => {});
   const current = feed("foryou");
+  if (!current && !feedFailed("foryou")) {
+    container.append(spinner());
+    return;
+  }
   if (!current || current.items.length === 0) {
     container.append(page(emptyState("sparkles", t("searching"), t("searchingHint"))));
     return;

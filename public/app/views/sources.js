@@ -1,6 +1,6 @@
-import { el, icon, emptyState, promptSheet, toast, chipStrip } from "../dom.js";
+import { el, icon, emptyState, promptSheet, toast, chipStrip, spinner } from "../dom.js";
 import { t, dayLabel, dayStart } from "../i18n.js";
-import { appState, feed, loadFeed, addSource } from "../store.js";
+import { appState, feed, loadFeed, addSource, feedFailed } from "../store.js";
 import { readLocal, writeLocal } from "../storage.js";
 import { navigate } from "../router.js";
 import { articleList } from "./articles.js";
@@ -65,6 +65,10 @@ export function renderSources(container) {
   if (sources.length > 1) container.append(el("div", { class: "list-bar" }, sourceChips(sources, active)));
   loadFeed("sources", active).catch(() => {});
   const current = feed("sources", active);
+  if (!current && !feedFailed("sources", active)) {
+    container.append(spinner());
+    return;
+  }
   if (!current || current.items.length === 0) {
     container.append(page(emptyState("newspaper", t("noArticles"), t("noArticlesHint"))));
     return;

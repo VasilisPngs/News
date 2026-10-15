@@ -1060,6 +1060,44 @@ html.locked {
   overscroll-behavior: none;
 }
 
+.spinner {
+  display: grid;
+  place-items: center;
+  padding: 32px var(--pad);
+  color: var(--muted);
+  animation: spinner-in var(--speed) var(--ease) 0.4s both;
+}
+
+.view > .spinner {
+  min-height: 60dvh;
+}
+
+.spinner-wheel {
+  position: relative;
+  width: 20px;
+  height: 20px;
+}
+
+.spinner-wheel span {
+  position: absolute;
+  top: 0;
+  left: 8.667px;
+  width: 2.667px;
+  height: 6.667px;
+  border-radius: var(--radius-full);
+  background: currentColor;
+  transform-origin: 50% 10px;
+  animation: spinner-pulse 1s steps(8, jump-none) infinite;
+}
+
+@keyframes spinner-in {
+  from { opacity: 0; }
+}
+
+@keyframes spinner-pulse {
+  from { opacity: 1; }
+  to { opacity: 0.055; }
+}
 .pull {
   position: fixed;
   top: calc(var(--topbar) + 15px);

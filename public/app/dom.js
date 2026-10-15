@@ -42,6 +42,10 @@ const ICON_PATHS = {
   newspaper: "M4.5 5.5c0-.6.4-1 1-1h10c.6 0 1 .4 1 1v13.5c0 .8.7 1.5 1.5 1.5H6.5c-1.1 0-2-.9-2-2zM16.5 9.5h2c.6 0 1 .4 1 1V19c0 .8-.7 1.5-1.5 1.5M7.5 8h6M7.5 11.5h6M7.5 15h4"
 };
 
+export function spinner() {
+  return el("div", { class: "spinner" }, el("div", { class: "spinner-wheel" }, Array.from({ length: 8 }, (_, index) => el("span", { style: `transform: rotate(${index * 45}deg); animation-delay: ${-((8 - index) % 8) * 125}ms` }))));
+}
+
 export function icon(name) {
   return svg("svg", { class: "icon", viewBox: "0 0 24 24", "data-icon": name }, svg("path", { d: ICON_PATHS[name] }));
 }
