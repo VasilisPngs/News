@@ -24,14 +24,16 @@ const NOTIFY_FRESH_MS = 6 * 3600000;
 const NOTIFY_PERCENTILE = 0.7;
 const NAME_MAX = 60;
 const MAX_PARAMS = 90;
-const WEIGHTS = { open: 1, save: 1, less: -1.5 };
+const WEIGHTS = { open: 0.5, read: 1.5, bounce: -1, save: 1, less: -1.5 };
+const BOUNCE_SECONDS = 10;
+const READ_SECONDS = 60;
 
 const SCHEMA = [
   "CREATE TABLE IF NOT EXISTS topics (id TEXT PRIMARY KEY, name TEXT NOT NULL, vector TEXT, position INTEGER NOT NULL, created_at INTEGER NOT NULL)",
   "CREATE TABLE IF NOT EXISTS sources (id TEXT PRIMARY KEY, title TEXT NOT NULL, site TEXT NOT NULL, feed TEXT NOT NULL UNIQUE, position INTEGER NOT NULL, created_at INTEGER NOT NULL, icon TEXT)",
   "CREATE TABLE IF NOT EXISTS feeds (url TEXT PRIMARY KEY, owner TEXT NOT NULL, kind TEXT NOT NULL, lang TEXT, fetched_at INTEGER NOT NULL DEFAULT 0, etag TEXT, modified TEXT, failures INTEGER NOT NULL DEFAULT 0)",
   "CREATE INDEX IF NOT EXISTS feeds_owner ON feeds (owner)",
-  "CREATE TABLE IF NOT EXISTS articles (id TEXT PRIMARY KEY, kind TEXT NOT NULL, owner TEXT NOT NULL, story TEXT NOT NULL, title TEXT NOT NULL, url TEXT NOT NULL, source TEXT NOT NULL, lang TEXT, published_at INTEGER NOT NULL, seen_at INTEGER NOT NULL, tokens TEXT NOT NULL, vector TEXT, affinity REAL NOT NULL DEFAULT 0, opened_at INTEGER, hidden_at INTEGER, saved_at INTEGER, notified_at INTEGER, image TEXT)",
+  "CREATE TABLE IF NOT EXISTS articles (id TEXT PRIMARY KEY, kind TEXT NOT NULL, owner TEXT NOT NULL, story TEXT NOT NULL, title TEXT NOT NULL, url TEXT NOT NULL, source TEXT NOT NULL, lang TEXT, published_at INTEGER NOT NULL, seen_at INTEGER NOT NULL, tokens TEXT NOT NULL, vector TEXT, affinity REAL NOT NULL DEFAULT 0, opened_at INTEGER, hidden_at INTEGER, saved_at INTEGER, notified_at INTEGER, image TEXT, dwell INTEGER)",
   "CREATE INDEX IF NOT EXISTS articles_kind_time ON articles (kind, published_at)",
   "CREATE INDEX IF NOT EXISTS articles_story ON articles (story)",
   "CREATE INDEX IF NOT EXISTS articles_owner ON articles (owner)",
@@ -81,6 +83,7 @@ async function upgrade(env) {
   const [articles, topics, sources] = await Promise.all(["articles", "topics", "sources"].map((table) => env.DB.prepare(`PRAGMA table_info(${table})`).all()));
   const steps = [];
   if (!articles.results.some((column) => column.name === "image")) steps.push("ALTER TABLE articles ADD COLUMN image TEXT");
+  if (!articles.results.some((column) => column.name === "dwell")) steps.push("ALTER TABLE articles ADD COLUMN dwell INTEGER");
   if (!sources.results.some((column) => column.name === "icon")) steps.push("ALTER TABLE sources ADD COLUMN icon TEXT");
   if (topics.results.some((column) => column.name === "query_en")) {
     steps.push("ALTER TABLE topics DROP COLUMN query_en", "DELETE FROM feeds WHERE kind = 'topic'", "DELETE FROM articles WHERE kind = 'topic' AND saved_at IS NULL");
@@ -275,8 +278,9 @@ async function feedRoute(request, env) {
 
 async function articleRoute(request, env) {
   const body = await readJson(request);
-  const row = await env.DB.prepare("SELECT id, vector, opened_at, saved_at FROM articles WHERE id = ?1").bind(String(body.id || "")).first();
+  const row = await env.DB.prepare("SELECT id, vector, opened_at, saved_at, dwell FROM articles WHERE id = ?1").bind(String(body.id || "")).first();
   if (!row) return json({ error: "not_found" }, 404);
+  if (body.action === "dwell") return dwellRoute(env, row, body.seconds);
   const now = Date.now();
   const column = { open: "opened_at", save: "saved_at", less: "hidden_at" }[body.action];
   const statements = [];
@@ -289,6 +293,18 @@ async function articleRoute(request, env) {
     const profile = learn(decodeProfile(await getMeta(env, "profile")), vector, WEIGHTS[body.action]);
     statements.push(setMeta(env, "profile", encodeProfile(profile)));
   }
+  await env.DB.batch(statements);
+  return json({ ok: true });
+}
+
+async function dwellRoute(env, row, value) {
+  const seconds = Math.round(Number(value));
+  if (!Number.isFinite(seconds) || seconds < 0) return json({ error: "invalid_seconds" }, 400);
+  if (!row.opened_at || row.dwell !== null) return json({ ok: true });
+  const statements = [env.DB.prepare("UPDATE articles SET dwell = ?2 WHERE id = ?1 AND dwell IS NULL").bind(row.id, Math.min(seconds, 86400))];
+  const weight = seconds < BOUNCE_SECONDS ? WEIGHTS.bounce : seconds >= READ_SECONDS ? WEIGHTS.read : 0;
+  const vector = decodeVector(row.vector);
+  if (weight && vector) statements.push(setMeta(env, "profile", encodeProfile(learn(decodeProfile(await getMeta(env, "profile")), vector, weight))));
   await env.DB.batch(statements);
   return json({ ok: true });
 }

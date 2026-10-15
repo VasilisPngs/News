@@ -1,4 +1,4 @@
-import { readJson, writeJson } from "./storage.js";
+import { readJson, writeJson, writeLocal } from "./storage.js";
 import { report } from "./report.js";
 
 const STALE_MS = 60000;
@@ -162,10 +162,26 @@ function patch(update) {
   changed();
 }
 
+const DWELL_KEY = "news.dwell";
+const DWELL_MAX = 3600;
+
+function beacon(payload) {
+  if (!navigator.sendBeacon("/api/article", new Blob([JSON.stringify(payload)], { type: "application/json" }))) post("/api/article", payload).catch(() => {});
+}
+
 export function markOpened(article) {
   patch((items) => items.map((item) => (item.id === article.id ? { ...item, opened: true } : item)));
-  const body = JSON.stringify({ id: article.id, action: "open" });
-  if (!navigator.sendBeacon("/api/article", new Blob([body], { type: "application/json" }))) post("/api/article", { id: article.id, action: "open" }).catch(() => {});
+  beacon({ id: article.id, action: "open" });
+  writeJson(DWELL_KEY, { id: article.id, at: Date.now() });
+}
+
+export function finishDwell(minimum = 0) {
+  const pending = readJson(DWELL_KEY);
+  if (!pending || typeof pending.id !== "string" || !Number.isFinite(pending.at)) return;
+  const elapsed = Date.now() - pending.at;
+  if (elapsed < minimum) return;
+  writeLocal(DWELL_KEY, null);
+  beacon({ id: pending.id, action: "dwell", seconds: Math.min(DWELL_MAX, Math.max(0, Math.round(elapsed / 1000))) });
 }
 
 export async function articleAction(article, action) {

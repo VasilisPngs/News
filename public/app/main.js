@@ -1,6 +1,6 @@
 import { el } from "./dom.js";
 import { startShell, scrollViewTop, watchBars, placeLens } from "./shell.js";
-import { storeEvents, status, loadState, loadFeed } from "./store.js";
+import { storeEvents, status, loadState, loadFeed, finishDwell } from "./store.js";
 import { currentRoute, navigation, startRouter } from "./router.js";
 import { renderForYou } from "./views/foryou.js";
 import { renderSources } from "./views/sources.js";
@@ -151,7 +151,16 @@ function release() {
   }, 0);
 }
 
-document.addEventListener("pointerdown", () => (pressing = true), true);
+const RETURN_GRACE_MS = 1000;
+
+document.addEventListener(
+  "pointerdown",
+  () => {
+    pressing = true;
+    finishDwell(RETURN_GRACE_MS);
+  },
+  true
+);
 document.addEventListener("pointerup", release, true);
 document.addEventListener("pointercancel", release, true);
 view.addEventListener("focusout", renderDeferred);
@@ -171,7 +180,11 @@ function boot() {
   refreshedAt = Date.now();
   loadState().catch(() => {});
   loadPush().then(render);
-  addEventListener("visibilitychange", refreshVisible);
+  addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") finishDwell();
+    refreshVisible();
+  });
+  finishDwell();
   watchServiceWorker();
 }
 

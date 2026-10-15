@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import worker, { refresh, notify, prune, backfill, pick, icons, posters } from "../src/index.js";
 import { environment, network, api, rss, context, device, decrypt, ai } from "./helpers.mjs";
+import { decodeProfile, decodeVector, cosine } from "../src/rank.js";
 
 const HOUR = 3600000;
 
@@ -121,6 +122,32 @@ test("opening, saving and Suggest Less shape the feed and the profile", async ()
   assert.equal((await api(worker, env, "/api/feed", { tab: "saved" })).json.items.length, 0);
   assert.equal((await api(worker, env, "/api/article", { id: "nope", action: "open" })).status, 404);
   assert.equal((await api(worker, env, "/api/article", { id: other.id, action: "explode" })).status, 400);
+});
+
+test("time away after opening an article teaches the profile once: a quick return counts against it, a long one for it", async () => {
+  const after = async (seconds) => {
+    const env = environment();
+    await setup(env);
+    const article = (await forYou(env)).find((item) => item.title === PEDRI);
+    assert.equal((await api(worker, env, "/api/article", { id: article.id, action: "dwell", seconds })).status, 200);
+    assert.equal(rows(env, "SELECT dwell FROM articles WHERE id = ?", article.id)[0].dwell, null);
+    await api(worker, env, "/api/article", { id: article.id, action: "open" });
+    await api(worker, env, "/api/article", { id: article.id, action: "dwell", seconds });
+    const profile = decodeProfile(rows(env, "SELECT value FROM meta WHERE key = 'profile'")[0].value);
+    await api(worker, env, "/api/article", { id: article.id, action: "dwell", seconds: 600 });
+    assert.deepEqual(decodeProfile(rows(env, "SELECT value FROM meta WHERE key = 'profile'")[0].value), profile);
+    assert.equal(rows(env, "SELECT dwell FROM articles WHERE id = ?", article.id)[0].dwell, seconds);
+    assert.equal((await api(worker, env, "/api/article", { id: article.id, action: "dwell", seconds: "soon" })).status, 400);
+    assert.equal((await api(worker, env, "/api/article", { id: article.id, action: "read" })).status, 400);
+    const vector = decodeVector(rows(env, "SELECT vector FROM articles WHERE id = ?", article.id)[0].vector);
+    return { direction: cosine(vector, profile), strength: Math.hypot(...profile) };
+  };
+  const bounce = await after(4);
+  const skim = await after(30);
+  const read = await after(90);
+  assert.ok(bounce.direction < -0.99);
+  assert.ok(skim.direction > 0.99 && read.direction > 0.99);
+  assert.ok(read.strength > 3 * skim.strength);
 });
 
 test("deleting a topic keeps every article and rescoring follows", async () => {
@@ -255,6 +282,7 @@ test("an older database gains the picture column on first use", async () => {
   env.DB.sqlite.exec("CREATE TABLE articles (id TEXT PRIMARY KEY, kind TEXT NOT NULL, owner TEXT NOT NULL, story TEXT NOT NULL, title TEXT NOT NULL, url TEXT NOT NULL, source TEXT NOT NULL, lang TEXT, published_at INTEGER NOT NULL, seen_at INTEGER NOT NULL, tokens TEXT NOT NULL, vector TEXT, affinity REAL NOT NULL DEFAULT 0, opened_at INTEGER, hidden_at INTEGER, saved_at INTEGER, notified_at INTEGER)");
   assert.equal((await api(worker, env, "/api/state", {})).status, 200);
   assert.ok(rows(env, "PRAGMA table_info(articles)").some((column) => column.name === "image"));
+  assert.ok(rows(env, "PRAGMA table_info(articles)").some((column) => column.name === "dwell"));
 });
 
 test("topic feeds of the previous version and their unsaved articles go, saved ones stay", async () => {
