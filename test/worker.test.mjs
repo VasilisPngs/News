@@ -77,6 +77,16 @@ test("the median gate keeps the better half and relevance outweighs freshness", 
   assert.deepEqual(pick([], now), []);
 });
 
+test("every fifth place goes to something outside the usual, never to what you turned away from", () => {
+  const now = Date.now();
+  const row = (id, affinity, coverage = 1, age = 1) => ({ id, affinity, coverage, published_at: now - age * HOUR });
+  const rows = [row("u1", 1), row("u2", 0.9), row("u3", 0.8), row("u4", 0.7), row("u5", 0.6), row("u6", 0.65), row("e1", 0.5), row("e2", 0.4, 3), row("e3", 0.35), row("no1", 0.2, 5), row("no2", 0.1, 5)];
+  const ids = pick(rows, now).map((entry) => entry.id);
+  assert.deepEqual(ids, ["u1", "u2", "u3", "u4", "e2", "u6", "u5"]);
+  assert.ok(!ids.includes("no1") && !ids.includes("no2"));
+  assert.deepEqual(pick(rows, now, 3).map((entry) => entry.id), ["u1", "u2", "u3"]);
+});
+
 test("a topic added later rescores the articles already there", async () => {
   const env = environment();
   await setup(env, Date.now(), { topic: null });

@@ -15,6 +15,7 @@ const POSTERS_PER_RUN = 3;
 const RESCORE_LIMIT = 400;
 const ERROR_RETENTION_MS = 30 * 86400000;
 const FOR_YOU_LIMIT = 60;
+const EXPLORE_EVERY = 5;
 const SOURCES_LIMIT = 120;
 const NOTIFY_DAILY = 3;
 const NOTIFY_COVERAGE = 4;
@@ -234,12 +235,15 @@ const item = (row) => ({
 export function pick(rows, now, limit = FOR_YOU_LIMIT) {
   const sorted = rows.map((row) => row.affinity).sort((a, b) => a - b);
   const median = sorted.length ? sorted[Math.floor(sorted.length / 2)] : 0;
+  const quartile = sorted.length ? sorted[Math.floor(sorted.length / 4)] : 0;
   const spread = (sorted.at(-1) ?? 0) - median || 1;
-  const score = (row) => (row.affinity - median) / spread + Math.min(row.coverage - 1, 5) * 0.05 - ((now - row.published_at) / WINDOW_MS) * 0.2;
-  return rows
-    .filter((row) => row.affinity >= median)
-    .sort((a, b) => score(b) - score(a))
-    .slice(0, limit);
+  const novelty = (row) => Math.min(row.coverage - 1, 5) * 0.05 - ((now - row.published_at) / WINDOW_MS) * 0.2;
+  const score = (row) => (row.affinity - median) / spread + novelty(row);
+  const usual = rows.filter((row) => row.affinity >= median).sort((a, b) => score(b) - score(a));
+  const fresh = rows.filter((row) => row.affinity >= quartile && row.affinity < median).sort((a, b) => novelty(b) - novelty(a));
+  const picked = [];
+  while (picked.length < limit && usual.length) picked.push((picked.length + 1) % EXPLORE_EVERY === 0 && fresh.length ? fresh.shift() : usual.shift());
+  return picked;
 }
 
 async function feedRoute(request, env) {
