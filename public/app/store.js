@@ -170,7 +170,7 @@ function beacon(payload) {
 }
 
 export function markOpened(article) {
-  patch((items) => items.map((item) => (item.id === article.id ? { ...item, opened: true } : item)));
+  patch((items, key) => (key === "foryou" ? items.filter((item) => item.id !== article.id) : items.map((item) => (item.id === article.id ? { ...item, opened: true } : item))));
   beacon({ id: article.id, action: "open" });
   writeJson(DWELL_KEY, { id: article.id, at: Date.now() });
 }

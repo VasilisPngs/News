@@ -269,7 +269,7 @@ async function feedRoute(request, env) {
       FROM articles a JOIN sources s ON s.id = a.owner
       WHERE a.vector IS NOT NULL AND a.published_at > ?1 AND a.story NOT IN (SELECT story FROM articles WHERE hidden_at IS NOT NULL)
       WINDOW same AS (PARTITION BY a.story)
-    ) WHERE place = 1 ORDER BY published_at DESC LIMIT ?2`
+    ) WHERE place = 1 AND opened IS NULL ORDER BY published_at DESC LIMIT ?2`
   )
     .bind(now - WINDOW_MS, RESCORE_LIMIT)
     .all();
