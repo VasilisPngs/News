@@ -73,7 +73,7 @@ function render() {
     delete view.dataset.title;
     delete view.dataset.editing;
     VIEWS[route.name](view, route.params);
-    setPull(route.name === "foryou" || route.name === "sources" ? () => pullRefresh(route.name, readLocal("news.source")) : null);
+    setPull(route.name === "foryou" || route.name === "sources" ? route.name : null, () => pullRefresh(route.name, readLocal("news.source")));
     if (changed) {
       lastRouteKey = key;
       lastTab = route.tab;
