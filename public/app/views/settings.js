@@ -5,7 +5,7 @@ import { goBack } from "../router.js";
 import { themeMode, themeModes, setTheme } from "../theme.js";
 import { pushSupported, pushEnabled, enablePush, disablePush } from "../push.js";
 import { appState, renameTopic, deleteTopic, renameSource, deleteSource, orderSources } from "../store.js";
-import { newTopic } from "./foryou.js";
+import { newTopic, categoryChips } from "./foryou.js";
 import { newSource } from "./sources.js";
 
 const barLead = document.getElementById("bar-lead");
@@ -154,6 +154,8 @@ export function renderTopics(container) {
     )
   );
   editList(container, t("topics"), rows, t("newTopic"), newTopic);
+  const chips = categoryChips();
+  if (chips) container.append(editHide(el("section", { class: "group" }, [el("h2", { text: t("categories") }), chips])));
 }
 
 export function renderSourceList(container) {

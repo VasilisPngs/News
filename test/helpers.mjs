@@ -56,13 +56,14 @@ function wordVector(text) {
   return vector;
 }
 
-export function ai() {
+export function ai({ sites = [] } = {}) {
   const calls = [];
   return {
     calls,
     run: async (model, input) => {
       calls.push({ model, input });
       if (model === "@cf/baai/bge-m3") return { shape: [input.text.length, 1024], data: input.text.map(wordVector) };
+      if (model === "@cf/google/gemma-4-26b-a4b-it") return { choices: [{ message: { role: "assistant", content: sites.join("\n") } }] };
       throw new Error(`unexpected model ${model}`);
     }
   };

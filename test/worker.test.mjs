@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import worker, { refresh, notify, prune, backfill, pick, icons, posters } from "../src/index.js";
+import worker, { refresh, notify, prune, backfill, pick, icons, posters, domains, suggestNext, tryCandidates } from "../src/index.js";
 import { environment, network, api, rss, context, device, decrypt, ai } from "./helpers.mjs";
 import { decodeProfile, decodeVector, cosine } from "../src/rank.js";
 
@@ -26,16 +26,23 @@ const sport = (now) =>
     "Sport24"
   );
 
-const sites = (now) =>
+const sites = (now, extra = []) =>
   network([
     ["https://gazzetta.example/", () => new Response(gazzetta(now))],
-    ["https://sport.example/", () => new Response(sport(now))]
+    ["https://sport.example/", () => new Response(sport(now))],
+    ...extra
   ]);
 
-async function setup(env, now = Date.now(), { topic = "Μπαρτσελόνα", sources = ["gazzetta.example", "sport.example"] } = {}) {
-  sites(now);
+const SITES = ["gazzetta.example", "sport.example"];
+
+const pooled = (suggested = SITES) => environment({ AI: ai({ sites: suggested }) });
+
+const followed = (now) => [["https://followed.example/", () => new Response(rss([{ title: "Μπαρτσελόνα: Νέα φανέλα για τη σεζόν", link: "https://followed.example/1", at: now - HOUR }], "Followed"))]];
+
+async function setup(env, now = Date.now(), { topic = "Μπαρτσελόνα", follow = [], extra = [] } = {}) {
+  sites(now, extra);
   if (topic) await api(worker, env, "/api/topics", { action: "add", name: topic });
-  for (const url of sources) await api(worker, env, "/api/sources", { action: "add", url });
+  for (const url of follow) await api(worker, env, "/api/sources", { action: "add", url });
   return (await api(worker, env, "/api/state", {})).json;
 }
 
@@ -47,15 +54,19 @@ const storyOf = (env, title) => rows(env, "SELECT story FROM articles WHERE titl
 
 const PEDRI = "Μπαρτσελόνα: Ανανέωση συμβολαίου για τον Πέδρι";
 
-test("For You picks from your sources what matches your topics, grouped by story", async () => {
-  const env = environment();
+test("For You picks from the sites the AI found for your topics, grouped by story, never from the ones you follow", async () => {
+  const env = pooled();
+  const now = Date.now();
+  sites(now, followed(now));
   const response = await api(worker, env, "/api/topics", { action: "add", name: "Μπαρτσελόνα" });
   assert.equal(response.status, 200);
   assert.deepEqual(response.json.topics.map((topic) => topic.name), ["Μπαρτσελόνα"]);
+  assert.deepEqual(response.json.sources, []);
   assert.ok(response.json.pushKey.length > 80);
-  assert.equal(rows(env, "SELECT COUNT(*) AS n FROM feeds")[0].n, 0);
-  assert.deepEqual(await forYou(env), []);
-  await setup(env, Date.now(), { topic: null });
+  assert.match(env.AI.calls.find((call) => call.model.includes("gemma")).input.messages[0].content, /"Μπαρτσελόνα"/);
+  assert.deepEqual(rows(env, "SELECT title, hidden FROM sources ORDER BY title"), [{ title: "Gazzetta", hidden: 1 }, { title: "Sport24", hidden: 1 }]);
+  assert.deepEqual(rows(env, "SELECT domain, tried FROM candidates ORDER BY domain"), [{ domain: "gazzetta.example", tried: 1 }, { domain: "sport.example", tried: 1 }]);
+  assert.deepEqual((await api(worker, env, "/api/state", {})).json.sources, []);
   assert.equal(rows(env, "SELECT COUNT(*) AS n FROM articles WHERE vector IS NOT NULL AND kind = 'source'")[0].n, 6);
   const items = await forYou(env);
   assert.equal(items.length, 4);
@@ -66,6 +77,29 @@ test("For You picks from your sources what matches your topics, grouped by story
   assert.equal(story.opened, false);
   assert.equal(items[0].title, PEDRI);
   assert.ok(items.indexOf(story) === 1);
+  assert.deepEqual((await api(worker, env, "/api/feed", { tab: "sources" })).json.items, []);
+  await api(worker, env, "/api/sources", { action: "add", url: "followed.example" });
+  assert.ok(!(await forYou(env)).some((item) => item.source === "Followed"));
+  assert.deepEqual((await api(worker, env, "/api/feed", { tab: "sources" })).json.items.map((item) => item.source), ["Followed"]);
+  const promoted = await api(worker, env, "/api/sources", { action: "add", url: "gazzetta.example" });
+  assert.deepEqual(promoted.json.sources.map((source) => source.title), ["Followed", "Gazzetta"]);
+  assert.ok((await forYou(env)).every((item) => item.source === "Sport24"));
+});
+
+test("site suggestions are read from any reply layout, and a topic's sites are tried two per cron run", async () => {
+  assert.deepEqual(domains("Sure!\n1. **www.Gazzetta.gr** – sports\n- https://www.bbc.co.uk/sport\n9to5mac.com\n9to5mac.com"), ["gazzetta.gr", "bbc.co.uk", "9to5mac.com"]);
+  const env = pooled(["gazzetta.example", "none.example", "sport.example"]);
+  const now = Date.now();
+  sites(now);
+  await api(worker, env, "/api/state", {});
+  env.DB.sqlite.prepare("INSERT INTO topics (id, name, vector, position, created_at) VALUES ('t1', 'Μπαρτσελόνα', NULL, 0, 1)").run();
+  assert.equal(await suggestNext(env, now), 3);
+  assert.equal(await suggestNext(env, now), 0);
+  assert.equal((await tryCandidates(env)).length, 1);
+  assert.equal((await tryCandidates(env)).length, 1);
+  assert.deepEqual(await tryCandidates(env), []);
+  assert.deepEqual(rows(env, "SELECT title FROM sources WHERE hidden = 1 AND topic = 't1' ORDER BY title").map((row) => row.title), ["Gazzetta", "Sport24"]);
+  assert.equal(rows(env, "SELECT COUNT(*) AS n FROM feeds")[0].n, 2);
 });
 
 test("the median gate keeps the better half and relevance outweighs freshness", () => {
@@ -105,7 +139,7 @@ test("every fifth place goes to something outside the usual, never to what you t
 
 test("a topic added later rescores the articles already there", async () => {
   const env = environment();
-  await setup(env, Date.now(), { topic: null });
+  await setup(env, Date.now(), { topic: null, follow: SITES });
   assert.ok(rows(env, "SELECT affinity FROM articles").every((row) => row.affinity === 0));
   await api(worker, env, "/api/topics", { action: "add", name: "Μπαρτσελόνα" });
   const pedri = rows(env, "SELECT affinity FROM articles WHERE title = ?", PEDRI)[0].affinity;
@@ -127,7 +161,7 @@ test("adding the same topic twice is refused and renaming re-embeds it", async (
 });
 
 test("opening, saving and Suggest Less shape the feed and the profile", async () => {
-  const env = environment();
+  const env = pooled();
   await setup(env);
   const items = await forYou(env);
   const story = items.find((item) => item.coverage === 2);
@@ -138,8 +172,7 @@ test("opening, saving and Suggest Less shape the feed and the profile", async ()
   let feed = await forYou(env);
   assert.ok(!feed.some((item) => item.coverage === 2 || /Λεβαντόφσκι/.test(item.title)));
   assert.equal(feed.find((item) => item.id === other.id).saved, true);
-  const following = (await api(worker, env, "/api/feed", { tab: "sources" })).json.items;
-  assert.equal(following.find((item) => item.id === story.id).opened, true);
+  assert.ok(rows(env, "SELECT opened_at FROM articles WHERE id = ?", story.id)[0].opened_at > 0);
   const saved = (await api(worker, env, "/api/feed", { tab: "saved" })).json.items;
   assert.deepEqual(saved.map((item) => [item.id, item.source]), [[other.id, "Gazzetta"]]);
   await api(worker, env, "/api/article", { id: other.id, action: "less" });
@@ -154,7 +187,7 @@ test("opening, saving and Suggest Less shape the feed and the profile", async ()
 
 test("time away after opening an article teaches the profile once: a quick return counts against it, a long one for it", async () => {
   const after = async (seconds) => {
-    const env = environment();
+    const env = pooled();
     await setup(env);
     const article = (await forYou(env)).find((item) => item.title === PEDRI);
     assert.equal((await api(worker, env, "/api/article", { id: article.id, action: "dwell", seconds })).status, 200);
@@ -179,7 +212,7 @@ test("time away after opening an article teaches the profile once: a quick retur
 });
 
 test("For You counts a story seen at most once every half hour and moves it down after repeated views", async () => {
-  const env = environment();
+  const env = pooled();
   await setup(env);
   const items = await forYou(env);
   const top = items[0];
@@ -198,13 +231,26 @@ test("For You counts a story seen at most once every half hour and moves it down
   assert.ok(after.some((item) => item.id === top.id));
 });
 
-test("deleting a topic keeps every article and rescoring follows", async () => {
-  const env = environment();
-  const state = await setup(env);
-  const after = await api(worker, env, "/api/topics", { action: "delete", id: state.topics[0].id });
+test("renaming a topic looks for its sites again and deleting it drops them, keeping saved articles and followed sites", async () => {
+  const env = pooled();
+  const now = Date.now();
+  const state = await setup(env, now, { follow: ["followed.example"], extra: followed(now) });
+  const id = state.topics[0].id;
+  const pedri = rows(env, "SELECT id FROM articles WHERE title = ?", PEDRI)[0].id;
+  await api(worker, env, "/api/article", { id: pedri, action: "save" });
+  const before = rows(env, "SELECT id FROM sources WHERE hidden = 1").map((row) => row.id);
+  await api(worker, env, "/api/topics", { action: "rename", id, name: "Ποδόσφαιρο" });
+  const again = rows(env, "SELECT id FROM sources WHERE hidden = 1").map((row) => row.id);
+  assert.equal(again.length, 2);
+  assert.ok(again.every((source) => !before.includes(source)));
+  assert.equal(env.AI.calls.filter((call) => call.model.includes("gemma")).length, 2);
+  const after = await api(worker, env, "/api/topics", { action: "delete", id });
   assert.deepEqual(after.json.topics, []);
-  assert.equal(rows(env, "SELECT COUNT(*) AS n FROM articles")[0].n, 6);
-  assert.ok(rows(env, "SELECT affinity FROM articles").every((row) => row.affinity < 1e-3));
+  assert.deepEqual(rows(env, "SELECT title FROM sources"), [{ title: "Followed" }]);
+  assert.equal(rows(env, "SELECT COUNT(*) AS n FROM candidates")[0].n, 0);
+  assert.equal(rows(env, "SELECT COUNT(*) AS n FROM feeds")[0].n, 1);
+  assert.deepEqual(rows(env, "SELECT title FROM articles ORDER BY title").map((row) => row.title), ["Μπαρτσελόνα: Νέα φανέλα για τη σεζόν", PEDRI].sort());
+  assert.equal((await api(worker, env, "/api/feed", { tab: "saved" })).json.items[0].title, PEDRI);
 });
 
 test("a source is found from its site, listed newest first and can be renamed, ordered and deleted", async () => {
@@ -241,7 +287,7 @@ test("a source is found from its site, listed newest first and can be renamed, o
   await api(worker, env, "/api/sources", { action: "delete", id: blog.id });
   feed = (await api(worker, env, "/api/feed", { tab: "sources" })).json.items;
   assert.deepEqual(feed.map((item) => item.title), ["Second post"]);
-  assert.deepEqual((await forYou(env)).map((item) => item.title), ["Second post"]);
+  assert.deepEqual(await forYou(env), []);
 });
 
 test("source articles carry their picture, and older ones get it filled in on the next fetch", async () => {
@@ -262,7 +308,6 @@ test("source articles carry their picture, and older ones get it filled in on th
   withImages = true;
   await refresh(env, now + 21 * 60000);
   assert.equal((await api(worker, env, "/api/feed", { tab: "sources" })).json.items[0].image, "https://pics.example/1.jpg");
-  assert.equal((await forYou(env))[0].image, "https://pics.example/1.jpg");
 });
 
 test("articles show their source's icon, found when the source is added or filled in by the cron", async () => {
@@ -275,7 +320,7 @@ test("articles show their source's icon, found when the source is added or fille
   ]);
   await api(worker, env, "/api/sources", { action: "add", url: "icons.example" });
   assert.equal(rows(env, "SELECT icon FROM sources")[0].icon, "https://icons.example/i64.png");
-  for (const tab of ["sources", "foryou"]) assert.equal((await api(worker, env, "/api/feed", { tab })).json.items[0].icon, "https://icons.example/i64.png");
+  assert.equal((await api(worker, env, "/api/feed", { tab: "sources" })).json.items[0].icon, "https://icons.example/i64.png");
   const id = (await api(worker, env, "/api/feed", { tab: "sources" })).json.items[0].id;
   await api(worker, env, "/api/article", { id, action: "save" });
   assert.equal((await api(worker, env, "/api/feed", { tab: "saved" })).json.items[0].icon, "https://icons.example/i64.png");
@@ -311,18 +356,16 @@ test("an article whose feed has no picture takes its page's share picture, once"
   assert.equal(images()["Story 1"], "https://plain.example/feed1.jpg");
 });
 
-test("articles stored without a vector get one later and join For You", async () => {
+test("articles stored without a vector get one later and are grouped by story", async () => {
   const env = environment({ AI: { run: async () => Promise.reject(new Error("down")) } });
   const now = Date.now();
-  await setup(env, now, { topic: null });
+  await setup(env, now, { topic: null, follow: SITES });
   assert.equal(rows(env, "SELECT COUNT(*) AS n FROM articles WHERE vector IS NULL AND tokens = ''")[0].n, 6);
-  assert.deepEqual(await forYou(env), []);
   env.AI = ai();
   assert.equal(await backfill(env, now), 6);
   assert.equal(await backfill(env, now), 0);
-  const items = await forYou(env);
-  assert.equal(items.length, 5);
-  assert.equal(items.find((item) => /Λεβαντόφσκι/.test(item.title)).coverage, 2);
+  assert.equal(rows(env, "SELECT COUNT(DISTINCT story) AS n FROM articles")[0].n, 5);
+  assert.equal(rows(env, "SELECT COUNT(*) AS n FROM articles WHERE story = ?", storyOf(env, "Λεβαντόφσκι"))[0].n, 2);
 });
 
 test("an older database gains the picture column on first use", async () => {
@@ -371,7 +414,7 @@ test("a site without any feed is refused", async () => {
 test("the cron fetches only due feeds, backs off failures and honours not modified", async () => {
   const env = environment();
   const now = Date.now();
-  await setup(env, now, { topic: null, sources: ["gazzetta.example"] });
+  await setup(env, now, { topic: null, follow: ["gazzetta.example"] });
   network([["https://gazzetta.example/", () => new Response("busy", { status: 503 })]]);
   assert.equal((await refresh(env, now + 5 * 60000)).added, 0);
   assert.equal(rows(env, "SELECT failures FROM feeds")[0].failures, 0);
@@ -405,7 +448,7 @@ async function subscribed(env, endpoint) {
 const highlight = (env, story) => env.DB.sqlite.prepare("UPDATE articles SET affinity = CASE WHEN story = ? THEN 0.9 ELSE 0.1 END").run(story);
 
 test("a story your sources share in your topics is pushed once, at most three times a day", async () => {
-  const env = environment();
+  const env = pooled();
   const now = Date.now();
   await setup(env, now);
   const pushes = await subscribed(env);
@@ -425,9 +468,9 @@ test("a story your sources share in your topics is pushed once, at most three ti
 });
 
 test("a lone source, a story only one source wrote, or a dull story never push", async () => {
-  const env = environment();
+  const env = pooled(["gazzetta.example"]);
   const now = Date.now();
-  await setup(env, now, { sources: ["gazzetta.example"] });
+  await setup(env, now);
   const early = await subscribed(env);
   const story = storyOf(env, "Γαλατάσαραϊ");
   highlight(env, story);
@@ -445,7 +488,7 @@ test("a lone source, a story only one source wrote, or a dull story never push",
 });
 
 test("a dead subscription is dropped when the push service says it is gone", async () => {
-  const env = environment();
+  const env = pooled();
   const now = Date.now();
   await setup(env, now);
   const target = await device("https://fcm.googleapis.com/fcm/send/gone");
@@ -459,7 +502,7 @@ test("a dead subscription is dropped when the push service says it is gone", asy
 });
 
 test("pruning drops unsaved articles after two weeks and orphans", async () => {
-  const env = environment();
+  const env = pooled();
   const now = Date.now();
   await setup(env, now);
   const ids = rows(env, "SELECT id FROM articles ORDER BY id").map((row) => row.id);
@@ -474,7 +517,7 @@ test("pruning drops unsaved articles after two weeks and orphans", async () => {
 });
 
 test("the hourly cron runs refresh, notify, backfill, rescore and prune without throwing", async () => {
-  const env = environment();
+  const env = pooled();
   const now = Date.now();
   await setup(env, now);
   const when = Math.ceil((now + 21 * 60000) / HOUR) * HOUR;
@@ -482,7 +525,7 @@ test("the hourly cron runs refresh, notify, backfill, rescore and prune without 
   const ctx = context();
   await worker.scheduled({ scheduledTime: when }, env, ctx);
   await ctx.settle();
-  assert.equal(calls.length, 2);
+  assert.equal(calls.filter((request) => new URL(request.url).pathname === "/").length, 2);
   assert.equal(rows(env, "SELECT COUNT(*) AS n FROM errors")[0].n, 0);
   assert.equal(rows(env, "SELECT COUNT(*) AS n FROM articles")[0].n, 6);
 });

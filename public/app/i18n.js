@@ -25,11 +25,10 @@ const STRINGS = {
   topicPlaceholder: ["Barcelona, AI, iPhone", "Μπαρτσελόνα, AI, iPhone"],
   topicExists: ["You already have this topic.", "Αυτό το θέμα υπάρχει ήδη."],
   noTopics: ["Nothing here yet", "Τίποτα ακόμα"],
-  noTopicsHint: ["Add topics you care about and the articles from your sources that match them show up here.", "Πρόσθεσε θέματα που σε ενδιαφέρουν και εδώ θα εμφανίζονται τα άρθρα των πηγών σου που τους ταιριάζουν."],
-  forYouNoSources: ["No sources yet", "Καμία πηγή ακόμα"],
-  forYouNoSourcesHint: ["Add the sites you read and the articles that suit you are picked from them here.", "Πρόσθεσε τα sites που διαβάζεις και εδώ θα διαλέγονται από αυτά τα άρθρα που σου ταιριάζουν."],
+  noTopicsHint: ["Pick categories or add your own topics, and the AI finds sites and articles for you.", "Διάλεξε κατηγορίες ή πρόσθεσε δικά σου θέματα και το AI θα βρει sites και άρθρα για σένα."],
   searching: ["Finding articles", "Ψάχνω άρθρα"],
-  searchingHint: ["Picking from your sources what matches your topics.", "Διαλέγω από τις πηγές σου ό,τι ταιριάζει στα θέματά σου."],
+  searchingHint: ["The AI is finding sites for your topics. The first articles arrive in a few minutes.", "Το AI βρίσκει sites για τα θέματά σου. Τα πρώτα άρθρα έρχονται σε λίγα λεπτά."],
+  categories: ["Categories", "Κατηγορίες"],
 
   sourcesTitle: ["Following", "Ακολουθείτε"],
   newSource: ["New source", "Νέα πηγή"],
@@ -55,7 +54,7 @@ const STRINGS = {
   topics: ["Topics", "Θέματα"],
   sources: ["Following", "Ακολουθείτε"],
   deleteTopic: ["Delete topic", "Διαγραφή θέματος"],
-  deleteTopicBody: ["For You stops picking articles for it.", "Το «Για εσάς» σταματά να διαλέγει άρθρα γι' αυτό."],
+  deleteTopicBody: ["The sites the AI found for it go too. Saved articles stay.", "Φεύγουν και τα sites που βρήκε το AI γι' αυτό. Τα αποθηκευμένα μένουν."],
   deleteSource: ["Delete source", "Διαγραφή πηγής"],
   deleteSourceBody: ["Its articles leave Following and For You. Saved ones stay.", "Τα άρθρα της φεύγουν από το «Ακολουθείτε» και το «Για εσάς». Τα αποθηκευμένα μένουν."],
   notifications: ["Notifications", "Ειδοποιήσεις"],
@@ -70,6 +69,27 @@ const STRINGS = {
   themeLight: ["Light", "Φωτεινό"],
   themeDark: ["Dark", "Σκούρο"]
 };
+
+const CATEGORIES = [
+  ["Health", "Υγεία"],
+  ["Fitness", "Άσκηση"],
+  ["Nutrition", "Διατροφή"],
+  ["Gaming", "Gaming"],
+  ["Gadgets", "Gadgets"],
+  ["Smartphones", "Κινητά"],
+  ["AI", "AI"],
+  ["Technology", "Τεχνολογία"],
+  ["Science", "Επιστήμη"],
+  ["Space", "Διάστημα"],
+  ["Music", "Μουσική"],
+  ["Movies", "Σινεμά"],
+  ["TV series", "Σειρές"],
+  ["Football", "Ποδόσφαιρο"],
+  ["Basketball", "Μπάσκετ"],
+  ["Cars", "Αυτοκίνητα"],
+  ["Economy", "Οικονομία"],
+  ["Travel", "Ταξίδια"]
+];
 
 const PLURALS = {
   source: [["source", "sources"], ["πηγή", "πηγές"]]
@@ -111,6 +131,8 @@ export function setLanguage(next) {
 export function applyLanguage() {
   document.documentElement.lang = current;
 }
+
+export const categories = () => CATEGORIES.map((names) => names[index]);
 
 export function t(key, params) {
   const entry = STRINGS[key];

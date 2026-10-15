@@ -3,6 +3,7 @@ import { report } from "./report.js";
 
 const STALE_MS = 60000;
 const WARM_DELAYS = [2500, 7000, 15000];
+const POOL_DELAYS = [5000, 15000, 30000, 60000, 120000];
 
 export const storeEvents = new EventTarget();
 
@@ -100,7 +101,7 @@ export function loadFeed(tab, source = null, force = false) {
 }
 
 function warmForYou() {
-  for (const delay of WARM_DELAYS) setTimeout(() => loadFeed("foryou", null, true).catch(() => {}), delay);
+  for (const delay of POOL_DELAYS) setTimeout(() => loadFeed("foryou", null, true).catch(() => {}), delay);
 }
 
 function warmSources(source) {

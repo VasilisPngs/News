@@ -4,8 +4,12 @@ import { quantize, encodeVector, decodeVector, encodeProfile, decodeProfile, lea
 import { createKey, publicKey, pushEndpoint, keyLength, sendPush } from "./push.js";
 
 const EMBED_MODEL = "@cf/baai/bge-m3";
+const SUGGEST_MODEL = "@cf/google/gemma-4-26b-a4b-it";
+const SUGGEST_COUNT = 12;
+const POOL_PER_RUN = 2;
+const POOL_RETRY_MS = 6 * 3600000;
 const EMBED_BATCH = 32;
-const FEEDS_PER_RUN = 4;
+const FEEDS_PER_RUN = 6;
 const FEED_INTERVAL_MS = 20 * 60000;
 const MAX_BACKOFF = 4;
 const WINDOW_MS = 48 * 3600000;
@@ -36,8 +40,9 @@ const BOUNCE_SECONDS = 10;
 const READ_SECONDS = 60;
 
 const SCHEMA = [
-  "CREATE TABLE IF NOT EXISTS topics (id TEXT PRIMARY KEY, name TEXT NOT NULL, vector TEXT, position INTEGER NOT NULL, created_at INTEGER NOT NULL)",
-  "CREATE TABLE IF NOT EXISTS sources (id TEXT PRIMARY KEY, title TEXT NOT NULL, site TEXT NOT NULL, feed TEXT NOT NULL UNIQUE, position INTEGER NOT NULL, created_at INTEGER NOT NULL, icon TEXT)",
+  "CREATE TABLE IF NOT EXISTS topics (id TEXT PRIMARY KEY, name TEXT NOT NULL, vector TEXT, position INTEGER NOT NULL, created_at INTEGER NOT NULL, pooled_at INTEGER)",
+  "CREATE TABLE IF NOT EXISTS candidates (topic TEXT NOT NULL, domain TEXT NOT NULL, tried INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (topic, domain))",
+  "CREATE TABLE IF NOT EXISTS sources (id TEXT PRIMARY KEY, title TEXT NOT NULL, site TEXT NOT NULL, feed TEXT NOT NULL UNIQUE, position INTEGER NOT NULL, created_at INTEGER NOT NULL, icon TEXT, hidden INTEGER NOT NULL DEFAULT 0, topic TEXT)",
   "CREATE TABLE IF NOT EXISTS feeds (url TEXT PRIMARY KEY, owner TEXT NOT NULL, kind TEXT NOT NULL, lang TEXT, fetched_at INTEGER NOT NULL DEFAULT 0, etag TEXT, modified TEXT, failures INTEGER NOT NULL DEFAULT 0)",
   "CREATE INDEX IF NOT EXISTS feeds_owner ON feeds (owner)",
   "CREATE TABLE IF NOT EXISTS articles (id TEXT PRIMARY KEY, kind TEXT NOT NULL, owner TEXT NOT NULL, story TEXT NOT NULL, title TEXT NOT NULL, url TEXT NOT NULL, source TEXT NOT NULL, lang TEXT, published_at INTEGER NOT NULL, seen_at INTEGER NOT NULL, tokens TEXT NOT NULL, vector TEXT, affinity REAL NOT NULL DEFAULT 0, opened_at INTEGER, hidden_at INTEGER, saved_at INTEGER, notified_at INTEGER, image TEXT, dwell INTEGER, views INTEGER NOT NULL DEFAULT 0, viewed_at INTEGER)",
@@ -93,6 +98,8 @@ async function upgrade(env) {
   if (!articles.results.some((column) => column.name === "dwell")) steps.push("ALTER TABLE articles ADD COLUMN dwell INTEGER");
   if (!articles.results.some((column) => column.name === "views")) steps.push("ALTER TABLE articles ADD COLUMN views INTEGER NOT NULL DEFAULT 0", "ALTER TABLE articles ADD COLUMN viewed_at INTEGER");
   if (!sources.results.some((column) => column.name === "icon")) steps.push("ALTER TABLE sources ADD COLUMN icon TEXT");
+  if (!sources.results.some((column) => column.name === "hidden")) steps.push("ALTER TABLE sources ADD COLUMN hidden INTEGER NOT NULL DEFAULT 0", "ALTER TABLE sources ADD COLUMN topic TEXT");
+  if (!topics.results.some((column) => column.name === "pooled_at")) steps.push("ALTER TABLE topics ADD COLUMN pooled_at INTEGER");
   if (topics.results.some((column) => column.name === "query_en")) {
     steps.push("ALTER TABLE topics DROP COLUMN query_en", "DELETE FROM feeds WHERE kind = 'topic'", "DELETE FROM articles WHERE kind = 'topic' AND saved_at IS NULL");
   }
@@ -140,7 +147,7 @@ async function vapidKey(env) {
 async function state(env) {
   const [topics, sources, key] = await Promise.all([
     env.DB.prepare("SELECT id, name FROM topics ORDER BY position, created_at").all(),
-    env.DB.prepare("SELECT id, title, site FROM sources ORDER BY position, created_at").all(),
+    env.DB.prepare("SELECT id, title, site FROM sources WHERE hidden = 0 ORDER BY position, created_at").all(),
     vapidKey(env)
   ]);
   return { topics: topics.results, sources: sources.results, pushKey: publicKey(key) };
@@ -152,10 +159,92 @@ function background(env, ctx, work, route) {
   ctx.waitUntil(work.catch((error) => recordError(env, { kind: "background", message: String(error && error.message), route })));
 }
 
+const unpool = (env, topic) => [
+  env.DB.prepare("DELETE FROM candidates WHERE topic = ?1").bind(topic),
+  env.DB.prepare("DELETE FROM articles WHERE saved_at IS NULL AND owner IN (SELECT id FROM sources WHERE hidden = 1 AND topic = ?1)").bind(topic),
+  env.DB.prepare("DELETE FROM feeds WHERE owner IN (SELECT id FROM sources WHERE hidden = 1 AND topic = ?1)").bind(topic),
+  env.DB.prepare("DELETE FROM sources WHERE hidden = 1 AND topic = ?1").bind(topic)
+];
+
+export function domains(text) {
+  const found = [];
+  for (const match of String(text || "").toLowerCase().matchAll(/\b((?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,24})\b/g)) {
+    const domain = match[1].replace(/^www\./, "");
+    if (!found.includes(domain)) found.push(domain);
+  }
+  return found.slice(0, SUGGEST_COUNT);
+}
+
+async function suggest(env, topic, now) {
+  let text = "";
+  try {
+    const result = await env.AI.run(SUGGEST_MODEL, {
+      messages: [
+        {
+          role: "user",
+          content: `List ${SUGGEST_COUNT} news websites that regularly publish articles about "${topic.name}". Mix Greek sites (.gr) with major international English-language sites, and prefer sites that offer an RSS feed. Reply with the bare domains only, one per line, nothing else.`
+        }
+      ],
+      max_completion_tokens: 400,
+      temperature: 0.2
+    });
+    text = result?.choices?.[0]?.message?.content ?? result?.response ?? "";
+  } catch (error) {
+    console.error(JSON.stringify({ suggest_failed: String(error && error.message).slice(0, 200) }));
+  }
+  const found = domains(text);
+  await env.DB.batch([
+    env.DB.prepare("UPDATE topics SET pooled_at = ?2 WHERE id = ?1").bind(topic.id, now),
+    ...found.map((domain) => env.DB.prepare("INSERT OR IGNORE INTO candidates (topic, domain) VALUES (?1, ?2)").bind(topic.id, domain))
+  ]);
+  return found.length;
+}
+
+export async function suggestNext(env, now) {
+  const topic = await env.DB.prepare(
+    "SELECT id, name FROM topics t WHERE pooled_at IS NULL OR (pooled_at < ?1 AND NOT EXISTS (SELECT 1 FROM candidates c WHERE c.topic = t.id)) ORDER BY created_at LIMIT 1"
+  )
+    .bind(now - POOL_RETRY_MS)
+    .first();
+  return topic ? suggest(env, topic, now) : 0;
+}
+
+export async function tryCandidates(env, limit = POOL_PER_RUN) {
+  const rows = (await env.DB.prepare("SELECT topic, domain FROM candidates WHERE tried = 0 ORDER BY rowid LIMIT ?1").bind(limit).all()).results;
+  const added = [];
+  for (const row of rows) {
+    const found = await discover(row.domain).catch(() => null);
+    const statements = [env.DB.prepare("UPDATE candidates SET tried = 1 WHERE topic = ?1 AND domain = ?2").bind(row.topic, row.domain)];
+    if (found && !(await env.DB.prepare("SELECT 1 AS hit FROM sources WHERE feed = ?1").bind(found.feed).first("hit"))) {
+      const id = crypto.randomUUID();
+      const site = found.site || new URL(found.feed).origin;
+      statements.push(
+        env.DB.prepare(
+          "INSERT INTO sources (id, title, site, feed, position, created_at, icon, hidden, topic) SELECT ?1, ?2, ?3, ?4, 0, ?5, ?6, 1, ?7 WHERE EXISTS (SELECT 1 FROM topics WHERE id = ?7)"
+        ).bind(id, cleanName(found.title) || new URL(site).hostname.replace(/^www\./, ""), site, found.feed, Date.now(), found.icon || null, row.topic),
+        env.DB.prepare("INSERT OR IGNORE INTO feeds (url, owner, kind, fetched_at) SELECT ?1, ?2, 'source', 0 WHERE EXISTS (SELECT 1 FROM sources WHERE id = ?2)").bind(found.feed, id)
+      );
+      added.push(id);
+    }
+    await env.DB.batch(statements);
+  }
+  return added;
+}
+
+async function seed(env, id) {
+  const now = Date.now();
+  const topic = await env.DB.prepare("SELECT id, name FROM topics WHERE id = ?1").bind(id).first();
+  if (!topic) return;
+  await suggest(env, topic, now);
+  for (const owner of await tryCandidates(env)) await refresh(env, now, { owner });
+  await Promise.all([icons(env), posters(env, now), rescore(env, now)]);
+}
+
 async function topicsRoute(request, env, ctx) {
   const body = await readJson(request);
   if (body.action === "delete") {
-    await env.DB.prepare("DELETE FROM topics WHERE id = ?1").bind(String(body.id || "")).run();
+    const id = String(body.id || "");
+    await env.DB.batch([...unpool(env, id), env.DB.prepare("DELETE FROM topics WHERE id = ?1").bind(id)]);
     background(env, ctx, rescore(env, Date.now()), "/topics");
     return json(await state(env));
   }
@@ -168,11 +257,12 @@ async function topicsRoute(request, env, ctx) {
   if (existing.some((topic) => topic.id !== id && sameName(topic.name, name))) return json({ error: "duplicate" }, 409);
   const [vector] = await embed(env, [name]);
   const encoded = vector ? encodeVector(vector) : null;
-  await (body.action === "add"
-    ? env.DB.prepare("INSERT INTO topics (id, name, vector, position, created_at) VALUES (?1, ?2, ?3, (SELECT COALESCE(MAX(position) + 1, 0) FROM topics), ?4)").bind(id, name, encoded, Date.now())
-    : env.DB.prepare("UPDATE topics SET name = ?2, vector = ?3 WHERE id = ?1").bind(id, name, encoded)
-  ).run();
-  background(env, ctx, rescore(env, Date.now()), "/topics");
+  await env.DB.batch(
+    body.action === "add"
+      ? [env.DB.prepare("INSERT INTO topics (id, name, vector, position, created_at) VALUES (?1, ?2, ?3, (SELECT COALESCE(MAX(position) + 1, 0) FROM topics), ?4)").bind(id, name, encoded, Date.now())]
+      : [...unpool(env, id), env.DB.prepare("UPDATE topics SET name = ?2, vector = ?3, pooled_at = NULL WHERE id = ?1").bind(id, name, encoded)]
+  );
+  background(env, ctx, seed(env, id), "/topics");
   return json(await state(env));
 }
 
@@ -201,7 +291,10 @@ async function sourcesRoute(request, env, ctx) {
   if (body.action !== "add") return json({ error: "invalid_action" }, 400);
   const found = await discover(body.url);
   if (!found) return json({ error: "no_feed" }, 422);
-  const duplicate = await env.DB.prepare("SELECT id FROM sources WHERE feed = ?1").bind(found.feed).first("id");
+  const duplicate = await env.DB.prepare("SELECT id, hidden FROM sources WHERE feed = ?1").bind(found.feed).first();
+  if (duplicate && duplicate.hidden) {
+    await env.DB.prepare("UPDATE sources SET hidden = 0, topic = NULL, position = (SELECT COALESCE(MAX(position) + 1, 0) FROM sources WHERE hidden = 0) WHERE id = ?1").bind(duplicate.id).run();
+  }
   if (duplicate) return json(await state(env));
   const created = crypto.randomUUID();
   const site = found.site || new URL(found.feed).origin;
@@ -289,7 +382,7 @@ async function feedRoute(request, env) {
   if (body.tab === "sources") {
     const owner = typeof body.source === "string" && body.source ? body.source : null;
     const rows = await env.DB.prepare(
-      `SELECT a.id, a.title, a.url, s.title AS source, s.icon, a.published_at, a.opened_at, a.saved_at, a.image FROM articles a JOIN sources s ON s.id = a.owner${owner ? " WHERE a.owner = ?2" : ""} ORDER BY a.published_at DESC LIMIT ?1`
+      `SELECT a.id, a.title, a.url, s.title AS source, s.icon, a.published_at, a.opened_at, a.saved_at, a.image FROM articles a JOIN sources s ON s.id = a.owner AND s.hidden = 0${owner ? " WHERE a.owner = ?2" : ""} ORDER BY a.published_at DESC LIMIT ?1`
     )
       .bind(...(owner ? [SOURCES_LIMIT, owner] : [SOURCES_LIMIT]))
       .all();
@@ -297,14 +390,14 @@ async function feedRoute(request, env) {
   }
   const rows = await env.DB.prepare(
     `SELECT id, title, url, source, icon, published_at, opened AS opened_at, saved AS saved_at, coverage, image, affinity, tokens, views FROM (
-      SELECT a.id, a.title, a.url, s.title AS source, s.icon, a.published_at, a.affinity, a.image, a.tokens,
+      SELECT a.id, a.title, a.url, s.title AS source, s.icon, s.hidden, a.published_at, a.affinity, a.image, a.tokens,
         MAX(a.opened_at) OVER same AS opened, MAX(a.saved_at) OVER same AS saved, MAX(a.views) OVER same AS views,
-        ROW_NUMBER() OVER (PARTITION BY a.story ORDER BY a.affinity DESC, a.published_at DESC) AS place,
+        ROW_NUMBER() OVER (PARTITION BY a.story ORDER BY s.hidden DESC, a.affinity DESC, a.published_at DESC) AS place,
         (SELECT COUNT(DISTINCT b.owner) FROM articles b WHERE b.story = a.story) AS coverage
       FROM articles a JOIN sources s ON s.id = a.owner
       WHERE a.vector IS NOT NULL AND a.published_at > ?1 AND a.story NOT IN (SELECT story FROM articles WHERE hidden_at IS NOT NULL)
       WINDOW same AS (PARTITION BY a.story)
-    ) WHERE place = 1 AND opened IS NULL ORDER BY published_at DESC LIMIT ?2`
+    ) WHERE place = 1 AND hidden = 1 AND opened IS NULL ORDER BY published_at DESC LIMIT ?2`
   )
     .bind(now - WINDOW_MS, RESCORE_LIMIT)
     .all();
@@ -678,6 +771,8 @@ export default {
         await backfill(env, now);
         await icons(env);
         await posters(env, now);
+        await suggestNext(env, now);
+        await tryCandidates(env);
         if (new Date(now).getUTCMinutes() < 2) {
           await rescore(env, now);
           await prune(env, now);

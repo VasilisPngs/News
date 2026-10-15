@@ -1,8 +1,7 @@
 import { el, icon, emptyState, promptSheet, toast } from "../dom.js";
-import { t } from "../i18n.js";
+import { t, categories } from "../i18n.js";
 import { appState, feed, loadFeed, addTopic, markSeen } from "../store.js";
 import { articleList } from "./articles.js";
-import { newSource } from "./sources.js";
 
 const barActions = document.getElementById("bar-actions");
 const SEEN_MS = 1000;
@@ -63,6 +62,21 @@ export async function newTopic() {
   }
 }
 
+export function categoryChips() {
+  const taken = new Set(appState().topics.map((topic) => topic.name.toLocaleLowerCase()));
+  const chips = categories()
+    .filter((name) => !taken.has(name.toLocaleLowerCase()))
+    .map((name) =>
+      el("button", {
+        class: "chip",
+        type: "button",
+        text: name,
+        onclick: () => addTopic(name).catch(() => toast(t("actionFailed")))
+      })
+    );
+  return chips.length ? el("div", { class: "chips wrap" }, chips) : null;
+}
+
 function page(state) {
   state.classList.add("page");
   return state;
@@ -71,12 +85,11 @@ function page(state) {
 export function renderForYou(container) {
   container.append(el("h1", { text: t("forYouTitle") }));
   barActions.append(el("button", { class: "bar-btn", type: "button", onclick: newTopic }, icon("plus")));
-  if (appState().sources.length === 0) {
-    container.append(page(emptyState("newspaper", t("forYouNoSources"), t("forYouNoSourcesHint"), el("button", { class: "btn primary", type: "button", text: t("newSource"), onclick: newSource }))));
-    return;
-  }
   if (appState().topics.length === 0) {
-    container.append(page(emptyState("sparkles", t("noTopics"), t("noTopicsHint"), el("button", { class: "btn primary", type: "button", text: t("newTopic"), onclick: newTopic }))));
+    container.append(
+      page(emptyState("sparkles", t("noTopics"), t("noTopicsHint"), el("button", { class: "btn primary", type: "button", text: t("newTopic"), onclick: newTopic }))),
+      el("section", { class: "group" }, [el("h2", { text: t("categories") }), categoryChips()])
+    );
     return;
   }
   loadFeed("foryou").catch(() => {});
