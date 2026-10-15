@@ -88,6 +88,10 @@ test("For You picks from the sites the AI found for your topics, grouped by stor
 
 test("site suggestions are read from any reply layout, and a topic's sites are tried two per cron run", async () => {
   assert.deepEqual(domains("Sure!\n1. **www.Gazzetta.gr** – sports\n- https://www.bbc.co.uk/sport\n9to5mac.com\n9to5mac.com"), ["gazzetta.gr", "bbc.co.uk", "9to5mac.com"]);
+  const reasoning = environment({ AI: { run: async () => ({ choices: [{ message: { content: null, reasoning_content: "Candidates: gazzetta.example and sport.example" } }] }) } });
+  sites(Date.now());
+  await api(worker, reasoning, "/api/topics", { action: "add", name: "Μπάλα" });
+  assert.deepEqual(rows(reasoning, "SELECT domain FROM candidates ORDER BY domain").map((row) => row.domain), ["gazzetta.example", "sport.example"]);
   const env = pooled(["gazzetta.example", "none.example", "sport.example"]);
   const now = Date.now();
   sites(now);

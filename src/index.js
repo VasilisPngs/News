@@ -175,8 +175,18 @@ export function domains(text) {
   return found.slice(0, SUGGEST_COUNT);
 }
 
+function replyText(result) {
+  const message = result?.choices?.[0]?.message ?? {};
+  const parts = [message.content, result?.response, message.reasoning_content, message.reasoning];
+  return parts
+    .flatMap((part) => (Array.isArray(part) ? part.map((piece) => piece?.text ?? "") : [part]))
+    .filter((part) => typeof part === "string" && part)
+    .join("\n");
+}
+
 async function suggest(env, topic, now) {
   let text = "";
+  let raw = null;
   try {
     const result = await env.AI.run(SUGGEST_MODEL, {
       messages: [
@@ -185,14 +195,16 @@ async function suggest(env, topic, now) {
           content: `List ${SUGGEST_COUNT} news websites that regularly publish articles about "${topic.name}". Mix Greek sites (.gr) with major international English-language sites, and prefer sites that offer an RSS feed. Reply with the bare domains only, one per line, nothing else.`
         }
       ],
-      max_completion_tokens: 400,
+      max_completion_tokens: 2048,
       temperature: 0.2
     });
-    text = result?.choices?.[0]?.message?.content ?? result?.response ?? "";
+    raw = result;
+    text = replyText(result);
   } catch (error) {
     console.error(JSON.stringify({ suggest_failed: String(error && error.message).slice(0, 200) }));
   }
   const found = domains(text);
+  if (!found.length && raw) console.error(JSON.stringify({ suggest_empty: JSON.stringify(raw).slice(0, 600) }));
   await env.DB.batch([
     env.DB.prepare("UPDATE topics SET pooled_at = ?2 WHERE id = ?1").bind(topic.id, now),
     ...found.map((domain) => env.DB.prepare("INSERT OR IGNORE INTO candidates (topic, domain) VALUES (?1, ?2)").bind(topic.id, domain))
