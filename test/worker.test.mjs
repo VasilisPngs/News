@@ -77,6 +77,22 @@ test("the median gate keeps the better half and relevance outweighs freshness", 
   assert.deepEqual(pick([], now), []);
 });
 
+test("stories you keep scrolling past make room for others", () => {
+  const now = Date.now();
+  const row = (id, affinity, views = 0) => ({ id, affinity, coverage: 1, published_at: now - HOUR, views });
+  const order = (views) => pick([row("a", 1, views), row("b", 0.9), row("c", 0.8), row("d", 0.1), row("e", 0.2)], now).map((entry) => entry.id);
+  assert.deepEqual(order(0), ["a", "b", "c"]);
+  assert.deepEqual(order(6), ["b", "a", "c"]);
+  assert.deepEqual(order(60), ["b", "a", "c"]);
+});
+
+test("close neighbours from the same source or about the same thing are spread apart", () => {
+  const now = Date.now();
+  const row = (id, affinity, source, tokens) => ({ id, affinity, coverage: 1, published_at: now - HOUR, source, tokens });
+  const rows = [row("a1", 0.5, "S", "apple homevi"), row("a2", 0.5, "S", "apple tv"), row("a3", 0.5, "S", "apple watch"), row("b1", 0.5, "T", "barcel pedri"), row("b2", 0.5, "T", "olympi niki"), row("l1", 0.1), row("l2", 0.1)];
+  assert.deepEqual(pick(rows, now, 4).map((entry) => entry.id), ["a1", "b1", "a2", "b2"]);
+});
+
 test("every fifth place goes to something outside the usual, never to what you turned away from", () => {
   const now = Date.now();
   const row = (id, affinity, coverage = 1, age = 1) => ({ id, affinity, coverage, published_at: now - age * HOUR });
@@ -160,6 +176,26 @@ test("time away after opening an article teaches the profile once: a quick retur
   assert.ok(bounce.direction < -0.99);
   assert.ok(skim.direction > 0.99 && read.direction > 0.99);
   assert.ok(read.strength > 3 * skim.strength);
+});
+
+test("For You counts a story seen at most once every half hour and moves it down after repeated views", async () => {
+  const env = environment();
+  await setup(env);
+  const items = await forYou(env);
+  const top = items[0];
+  const views = () => rows(env, "SELECT views FROM articles WHERE id = ?", top.id)[0].views;
+  assert.equal((await api(worker, env, "/api/seen", { ids: [top.id, top.id, 5, ""] })).status, 200);
+  assert.equal(views(), 1);
+  await api(worker, env, "/api/seen", { ids: [top.id] });
+  assert.equal(views(), 1);
+  env.DB.sqlite.prepare("UPDATE articles SET viewed_at = ? WHERE id = ?").run(Date.now() - 31 * 60000, top.id);
+  await api(worker, env, "/api/seen", { ids: [top.id] });
+  assert.equal(views(), 2);
+  assert.equal((await api(worker, env, "/api/seen", { ids: "nope" })).status, 200);
+  env.DB.sqlite.prepare("UPDATE articles SET views = 6 WHERE id = ?").run(top.id);
+  const after = await forYou(env);
+  assert.notEqual(after[0].id, top.id);
+  assert.ok(after.some((item) => item.id === top.id));
 });
 
 test("deleting a topic keeps every article and rescoring follows", async () => {
@@ -295,6 +331,7 @@ test("an older database gains the picture column on first use", async () => {
   assert.equal((await api(worker, env, "/api/state", {})).status, 200);
   assert.ok(rows(env, "PRAGMA table_info(articles)").some((column) => column.name === "image"));
   assert.ok(rows(env, "PRAGMA table_info(articles)").some((column) => column.name === "dwell"));
+  assert.ok(rows(env, "PRAGMA table_info(articles)").some((column) => column.name === "views"));
 });
 
 test("topic feeds of the previous version and their unsaved articles go, saved ones stay", async () => {

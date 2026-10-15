@@ -16,6 +16,12 @@ const RESCORE_LIMIT = 400;
 const ERROR_RETENTION_MS = 30 * 86400000;
 const FOR_YOU_LIMIT = 60;
 const EXPLORE_EVERY = 5;
+const VIEW_PENALTY = 0.12;
+const VIEW_CAP = 6;
+const VIEW_GAP_MS = 30 * 60000;
+const SAME_SOURCE = 0.08;
+const SAME_WORDS = 0.12;
+const VARIETY_WINDOW = 6;
 const SOURCES_LIMIT = 120;
 const NOTIFY_DAILY = 3;
 const NOTIFY_COVERAGE = 4;
@@ -34,7 +40,7 @@ const SCHEMA = [
   "CREATE TABLE IF NOT EXISTS sources (id TEXT PRIMARY KEY, title TEXT NOT NULL, site TEXT NOT NULL, feed TEXT NOT NULL UNIQUE, position INTEGER NOT NULL, created_at INTEGER NOT NULL, icon TEXT)",
   "CREATE TABLE IF NOT EXISTS feeds (url TEXT PRIMARY KEY, owner TEXT NOT NULL, kind TEXT NOT NULL, lang TEXT, fetched_at INTEGER NOT NULL DEFAULT 0, etag TEXT, modified TEXT, failures INTEGER NOT NULL DEFAULT 0)",
   "CREATE INDEX IF NOT EXISTS feeds_owner ON feeds (owner)",
-  "CREATE TABLE IF NOT EXISTS articles (id TEXT PRIMARY KEY, kind TEXT NOT NULL, owner TEXT NOT NULL, story TEXT NOT NULL, title TEXT NOT NULL, url TEXT NOT NULL, source TEXT NOT NULL, lang TEXT, published_at INTEGER NOT NULL, seen_at INTEGER NOT NULL, tokens TEXT NOT NULL, vector TEXT, affinity REAL NOT NULL DEFAULT 0, opened_at INTEGER, hidden_at INTEGER, saved_at INTEGER, notified_at INTEGER, image TEXT, dwell INTEGER)",
+  "CREATE TABLE IF NOT EXISTS articles (id TEXT PRIMARY KEY, kind TEXT NOT NULL, owner TEXT NOT NULL, story TEXT NOT NULL, title TEXT NOT NULL, url TEXT NOT NULL, source TEXT NOT NULL, lang TEXT, published_at INTEGER NOT NULL, seen_at INTEGER NOT NULL, tokens TEXT NOT NULL, vector TEXT, affinity REAL NOT NULL DEFAULT 0, opened_at INTEGER, hidden_at INTEGER, saved_at INTEGER, notified_at INTEGER, image TEXT, dwell INTEGER, views INTEGER NOT NULL DEFAULT 0, viewed_at INTEGER)",
   "CREATE INDEX IF NOT EXISTS articles_kind_time ON articles (kind, published_at)",
   "CREATE INDEX IF NOT EXISTS articles_story ON articles (story)",
   "CREATE INDEX IF NOT EXISTS articles_owner ON articles (owner)",
@@ -85,6 +91,7 @@ async function upgrade(env) {
   const steps = [];
   if (!articles.results.some((column) => column.name === "image")) steps.push("ALTER TABLE articles ADD COLUMN image TEXT");
   if (!articles.results.some((column) => column.name === "dwell")) steps.push("ALTER TABLE articles ADD COLUMN dwell INTEGER");
+  if (!articles.results.some((column) => column.name === "views")) steps.push("ALTER TABLE articles ADD COLUMN views INTEGER NOT NULL DEFAULT 0", "ALTER TABLE articles ADD COLUMN viewed_at INTEGER");
   if (!sources.results.some((column) => column.name === "icon")) steps.push("ALTER TABLE sources ADD COLUMN icon TEXT");
   if (topics.results.some((column) => column.name === "query_en")) {
     steps.push("ALTER TABLE topics DROP COLUMN query_en", "DELETE FROM feeds WHERE kind = 'topic'", "DELETE FROM articles WHERE kind = 'topic' AND saved_at IS NULL");
@@ -232,17 +239,41 @@ const item = (row) => ({
   icon: row.icon || null
 });
 
+function closeness(row, other) {
+  const words = new Set(String(other.tokens || "").split(" ").filter(Boolean));
+  const shared = String(row.tokens || "").split(" ").some((word) => words.has(word));
+  return (row.source && row.source === other.source ? SAME_SOURCE : 0) + (shared ? SAME_WORDS : 0);
+}
+
+function next(pool, value, previous) {
+  if (!previous) return 0;
+  let best = 0;
+  let bestValue = -Infinity;
+  for (let index = 0; index < Math.min(pool.length, VARIETY_WINDOW); index += 1) {
+    const candidate = value(pool[index]) - closeness(pool[index], previous);
+    if (candidate > bestValue) {
+      best = index;
+      bestValue = candidate;
+    }
+  }
+  return best;
+}
+
 export function pick(rows, now, limit = FOR_YOU_LIMIT) {
   const sorted = rows.map((row) => row.affinity).sort((a, b) => a - b);
   const median = sorted.length ? sorted[Math.floor(sorted.length / 2)] : 0;
   const quartile = sorted.length ? sorted[Math.floor(sorted.length / 4)] : 0;
   const spread = (sorted.at(-1) ?? 0) - median || 1;
-  const novelty = (row) => Math.min(row.coverage - 1, 5) * 0.05 - ((now - row.published_at) / WINDOW_MS) * 0.2;
+  const novelty = (row) => Math.min(row.coverage - 1, 5) * 0.05 - ((now - row.published_at) / WINDOW_MS) * 0.2 - Math.min(row.views || 0, VIEW_CAP) * VIEW_PENALTY;
   const score = (row) => (row.affinity - median) / spread + novelty(row);
   const usual = rows.filter((row) => row.affinity >= median).sort((a, b) => score(b) - score(a));
   const fresh = rows.filter((row) => row.affinity >= quartile && row.affinity < median).sort((a, b) => novelty(b) - novelty(a));
   const picked = [];
-  while (picked.length < limit && usual.length) picked.push((picked.length + 1) % EXPLORE_EVERY === 0 && fresh.length ? fresh.shift() : usual.shift());
+  while (picked.length < limit && usual.length) {
+    const exploring = (picked.length + 1) % EXPLORE_EVERY === 0 && fresh.length > 0;
+    const pool = exploring ? fresh : usual;
+    picked.push(pool.splice(next(pool, exploring ? novelty : score, picked.at(-1)), 1)[0]);
+  }
   return picked;
 }
 
@@ -265,9 +296,9 @@ async function feedRoute(request, env) {
     return json({ items: rows.results.map(item) });
   }
   const rows = await env.DB.prepare(
-    `SELECT id, title, url, source, icon, published_at, opened AS opened_at, saved AS saved_at, coverage, image, affinity FROM (
-      SELECT a.id, a.title, a.url, s.title AS source, s.icon, a.published_at, a.affinity, a.image,
-        MAX(a.opened_at) OVER same AS opened, MAX(a.saved_at) OVER same AS saved,
+    `SELECT id, title, url, source, icon, published_at, opened AS opened_at, saved AS saved_at, coverage, image, affinity, tokens, views FROM (
+      SELECT a.id, a.title, a.url, s.title AS source, s.icon, a.published_at, a.affinity, a.image, a.tokens,
+        MAX(a.opened_at) OVER same AS opened, MAX(a.saved_at) OVER same AS saved, MAX(a.views) OVER same AS views,
         ROW_NUMBER() OVER (PARTITION BY a.story ORDER BY a.affinity DESC, a.published_at DESC) AS place,
         (SELECT COUNT(DISTINCT b.owner) FROM articles b WHERE b.story = a.story) AS coverage
       FROM articles a JOIN sources s ON s.id = a.owner
@@ -310,6 +341,18 @@ async function dwellRoute(env, row, value) {
   const vector = decodeVector(row.vector);
   if (weight && vector) statements.push(setMeta(env, "profile", encodeProfile(learn(decodeProfile(await getMeta(env, "profile")), vector, weight))));
   await env.DB.batch(statements);
+  return json({ ok: true });
+}
+
+async function seenRoute(request, env) {
+  const body = await readJson(request);
+  const ids = [...new Set((Array.isArray(body.ids) ? body.ids : []).filter((id) => typeof id === "string" && id))].slice(0, FOR_YOU_LIMIT);
+  if (ids.length) {
+    const now = Date.now();
+    await env.DB.prepare(`UPDATE articles SET views = views + 1, viewed_at = ?1 WHERE id IN (${slots(ids.length, 3)}) AND (viewed_at IS NULL OR viewed_at < ?2)`)
+      .bind(now, now - VIEW_GAP_MS, ...ids)
+      .run();
+  }
   return json({ ok: true });
 }
 
@@ -604,6 +647,7 @@ const ROUTES = {
   "/api/sources": sourcesRoute,
   "/api/article": articleRoute,
   "/api/push": pushRoute,
+  "/api/seen": seenRoute,
   "/api/report": reportRoute
 };
 

@@ -49,7 +49,7 @@ function thumbnail(article, row) {
 }
 
 function articleRow(article, mode) {
-  const content = el("div", { class: article.opened ? "list-item article read" : "list-item article" });
+  const content = el("div", { class: article.opened ? "list-item article read" : "list-item article", "data-id": article.id });
   content.append(
     el("a", { class: "article-link grow", href: article.url, target: "_blank", rel: "noopener noreferrer", onclick: () => markOpened(article) }, [
       el("span", { class: "article-title", text: article.title }),

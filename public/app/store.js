@@ -165,9 +165,11 @@ function patch(update) {
 const DWELL_KEY = "news.dwell";
 const DWELL_MAX = 3600;
 
-function beacon(payload) {
-  if (!navigator.sendBeacon("/api/article", new Blob([JSON.stringify(payload)], { type: "application/json" }))) post("/api/article", payload).catch(() => {});
+function beacon(payload, path = "/api/article") {
+  if (!navigator.sendBeacon(path, new Blob([JSON.stringify(payload)], { type: "application/json" }))) post(path, payload).catch(() => {});
 }
+
+export const markSeen = (ids) => beacon({ ids }, "/api/seen");
 
 export function markOpened(article) {
   patch((items, key) => (key === "foryou" ? items.filter((item) => item.id !== article.id) : items.map((item) => (item.id === article.id ? { ...item, opened: true } : item))));
