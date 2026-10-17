@@ -392,6 +392,8 @@ test("topic feeds of the previous version and their unsaved articles go, saved o
     CREATE TABLE sources (id TEXT PRIMARY KEY, title TEXT NOT NULL, site TEXT NOT NULL, feed TEXT NOT NULL UNIQUE, position INTEGER NOT NULL, created_at INTEGER NOT NULL);
     INSERT INTO sources VALUES ('s1', 'Site', 'https://site.example/', 'https://site.example/feed', 0, 1);
     CREATE TABLE articles (id TEXT PRIMARY KEY, kind TEXT NOT NULL, owner TEXT NOT NULL, story TEXT NOT NULL, title TEXT NOT NULL, url TEXT NOT NULL, source TEXT NOT NULL, lang TEXT, published_at INTEGER NOT NULL, seen_at INTEGER NOT NULL, tokens TEXT NOT NULL, vector TEXT, affinity REAL NOT NULL DEFAULT 0, opened_at INTEGER, hidden_at INTEGER, saved_at INTEGER, notified_at INTEGER, image TEXT);
+    CREATE INDEX articles_kind_time ON articles (kind, published_at);
+    CREATE INDEX articles_saved ON articles (saved_at);
   `);
   const insert = env.DB.sqlite.prepare("INSERT INTO articles (id, kind, owner, story, title, url, source, published_at, seen_at, tokens, saved_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, '', ?)");
   insert.run("x", "source", "s1", "x", "Kept", "https://site.example/x", "Site", now, now, null);
@@ -402,6 +404,10 @@ test("topic feeds of the previous version and their unsaved articles go, saved o
   assert.ok(!rows(env, "PRAGMA table_info(topics)").some((column) => column.name === "query_en"));
   assert.deepEqual(rows(env, "SELECT kind FROM feeds"), [{ kind: "source" }]);
   assert.ok(rows(env, "PRAGMA table_info(sources)").some((column) => column.name === "icon"));
+  assert.deepEqual(
+    rows(env, "SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name IN ('articles', 'candidates') AND sql IS NOT NULL ORDER BY name").map((row) => row.name),
+    ["articles_hidden", "articles_imageless", "articles_kept", "articles_notified", "articles_owner", "articles_story", "articles_time", "articles_unembedded", "candidates_open"]
+  );
   assert.deepEqual(rows(env, "SELECT id FROM articles ORDER BY id").map((row) => row.id), ["g2", "x"]);
   const saved = (await api(worker, env, "/api/feed", { tab: "saved" })).json.items;
   assert.deepEqual(saved.map((item) => [item.title, item.source]), [["Saved", "Verge"]]);
@@ -521,13 +527,12 @@ test("a dead subscription is dropped when the push service says it is gone", asy
   assert.equal((await api(worker, env, "/api/push", { action: "subscribe", subscription: { endpoint: "https://evil.example/x", keys: {} } })).status, 400);
 });
 
-test("pruning drops unsaved articles after two weeks and orphans", async () => {
+test("pruning drops unsaved articles after two weeks", async () => {
   const env = pooled();
   const now = Date.now();
   await setup(env, now);
   const ids = rows(env, "SELECT id FROM articles ORDER BY id").map((row) => row.id);
   env.DB.sqlite.prepare("UPDATE articles SET seen_at = ?").run(now - 13 * 86400000);
-  env.DB.sqlite.prepare("INSERT INTO articles (id, kind, owner, story, title, url, source, published_at, seen_at, tokens) VALUES ('orphan', 'source', 'gone', 'orphan', 'T', 'https://x.example', 'X', ?, ?, '')").run(now, now);
   await prune(env, now);
   assert.equal(rows(env, "SELECT COUNT(*) AS n FROM articles")[0].n, 6);
   env.DB.sqlite.prepare("UPDATE articles SET seen_at = ?").run(now - 15 * 86400000);

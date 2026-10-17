@@ -47,13 +47,23 @@ const SCHEMA = [
   "CREATE TABLE IF NOT EXISTS feeds (url TEXT PRIMARY KEY, owner TEXT NOT NULL, kind TEXT NOT NULL, lang TEXT, fetched_at INTEGER NOT NULL DEFAULT 0, etag TEXT, modified TEXT, failures INTEGER NOT NULL DEFAULT 0)",
   "CREATE INDEX IF NOT EXISTS feeds_owner ON feeds (owner)",
   "CREATE TABLE IF NOT EXISTS articles (id TEXT PRIMARY KEY, kind TEXT NOT NULL, owner TEXT NOT NULL, story TEXT NOT NULL, title TEXT NOT NULL, url TEXT NOT NULL, source TEXT NOT NULL, lang TEXT, published_at INTEGER NOT NULL, seen_at INTEGER NOT NULL, tokens TEXT NOT NULL, vector TEXT, affinity REAL NOT NULL DEFAULT 0, opened_at INTEGER, hidden_at INTEGER, saved_at INTEGER, notified_at INTEGER, image TEXT, dwell INTEGER, views INTEGER NOT NULL DEFAULT 0, viewed_at INTEGER)",
-  "CREATE INDEX IF NOT EXISTS articles_kind_time ON articles (kind, published_at)",
+  "CREATE INDEX IF NOT EXISTS articles_time ON articles (published_at)",
   "CREATE INDEX IF NOT EXISTS articles_story ON articles (story)",
   "CREATE INDEX IF NOT EXISTS articles_owner ON articles (owner)",
-  "CREATE INDEX IF NOT EXISTS articles_saved ON articles (saved_at)",
+  "CREATE INDEX IF NOT EXISTS articles_kept ON articles (saved_at, seen_at)",
   "CREATE TABLE IF NOT EXISTS subscriptions (endpoint TEXT PRIMARY KEY, p256dh TEXT NOT NULL, auth TEXT NOT NULL, created_at INTEGER NOT NULL)",
   "CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)",
   "CREATE TABLE IF NOT EXISTS errors (at INTEGER NOT NULL, kind TEXT NOT NULL, message TEXT NOT NULL, stack TEXT, route TEXT, agent TEXT)"
+];
+
+const INDEXES = [
+  "DROP INDEX IF EXISTS articles_kind_time",
+  "DROP INDEX IF EXISTS articles_saved",
+  "CREATE INDEX IF NOT EXISTS articles_unembedded ON articles (published_at) WHERE vector IS NULL",
+  "CREATE INDEX IF NOT EXISTS articles_imageless ON articles (published_at) WHERE image IS NULL",
+  "CREATE INDEX IF NOT EXISTS articles_hidden ON articles (story) WHERE hidden_at IS NOT NULL",
+  "CREATE INDEX IF NOT EXISTS articles_notified ON articles (story) WHERE notified_at IS NOT NULL",
+  "CREATE INDEX IF NOT EXISTS candidates_open ON candidates (tried)"
 ];
 
 const json = (body, status = 200) =>
@@ -111,6 +121,7 @@ async function upgrade(env) {
         if (!/duplicate column|no such column/i.test(String(error && error.message))) throw error;
       });
   }
+  await env.DB.batch(INDEXES.map((sql) => env.DB.prepare(sql)));
 }
 
 async function hashId(text) {
@@ -701,7 +712,7 @@ export async function notify(env, now, touched) {
   if (sent >= NOTIFY_DAILY) return null;
   const stories = [...touched].slice(0, MAX_PARAMS);
   const covered = await env.DB.prepare(
-    `SELECT story, COUNT(DISTINCT owner) AS coverage FROM articles WHERE story IN (${slots(stories.length, 3)}) AND published_at > ?1 AND story NOT IN (SELECT story FROM articles WHERE notified_at IS NOT NULL OR hidden_at IS NOT NULL) GROUP BY story HAVING coverage >= ?2`
+    `SELECT story, COUNT(DISTINCT owner) AS coverage FROM articles WHERE story IN (${slots(stories.length, 3)}) AND published_at > ?1 AND story NOT IN (SELECT story FROM articles WHERE notified_at IS NOT NULL) AND story NOT IN (SELECT story FROM articles WHERE hidden_at IS NOT NULL) GROUP BY story HAVING coverage >= ?2`
   )
     .bind(now - NOTIFY_SPAN_MS, needed, ...stories)
     .all();
@@ -752,7 +763,6 @@ export async function notify(env, now, touched) {
 export async function prune(env, now) {
   await env.DB.batch([
     env.DB.prepare("DELETE FROM articles WHERE saved_at IS NULL AND seen_at < ?1").bind(now - RETENTION_MS),
-    env.DB.prepare("DELETE FROM articles WHERE saved_at IS NULL AND owner NOT IN (SELECT id FROM sources)"),
     env.DB.prepare("DELETE FROM errors WHERE at < ?1").bind(now - ERROR_RETENTION_MS),
     env.DB.prepare("DELETE FROM meta WHERE key LIKE 'sent:%' AND key < ?1").bind(`sent:${athensDay(now - 2 * 86400000)}`)
   ]);
