@@ -210,7 +210,7 @@ input:focus-visible {
   display: flex;
   align-items: center;
   height: var(--topbar);
-  padding: env(safe-area-inset-top) max(4px, env(safe-area-inset-right)) 0 4px;
+  padding: env(safe-area-inset-top) max(calc(var(--margin) - 12px), env(safe-area-inset-right), calc((100% - var(--rail) - var(--column)) / 2 - 12px)) 0 max(calc(var(--margin) - 12px), calc((100% - var(--rail) - var(--column)) / 2 - 12px));
   background: var(--md-surface);
   transition: background-color var(--md-default-effects);
 }
@@ -249,7 +249,7 @@ input:focus-visible {
 }
 
 .bar-lead:not(:empty) + .bar-title {
-  margin-left: 0;
+  margin-left: 4px;
 }
 
 .icon-btn {
@@ -373,10 +373,6 @@ input:focus-visible {
     flex: none;
     padding-block: 6px;
   }
-
-  .topbar {
-    padding-inline: 12px max(12px, env(safe-area-inset-right));
-  }
 }
 
 .view {
@@ -457,6 +453,11 @@ input:focus-visible {
   padding-block: 12px;
 }
 
+.list-item:not(.article):has(.supporting) {
+  min-height: 72px;
+  padding-block: 12px;
+}
+
 .grow {
   flex: 1;
   min-width: 0;
@@ -490,7 +491,6 @@ input:focus-visible {
 .drag-handle {
   display: grid;
   place-items: center;
-  margin-inline-start: -4px;
   color: var(--md-on-surface-variant);
   touch-action: none;
   cursor: grab;
