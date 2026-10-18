@@ -16,12 +16,15 @@ const STRINGS = {
 
   delete: ["Delete", "Διαγραφή"],
   rename: ["Rename", "Μετονομασία"],
-  edit: ["Edit", "Αλλαγές"],
+  cancel: ["Cancel", "Ακύρωση"],
+  add: ["Add", "Προσθήκη"],
+  save: ["Save", "Αποθήκευση"],
   namePlaceholder: ["Name", "Όνομα"],
   all: ["All", "Όλες"],
 
   forYouTitle: ["For You", "Για εσάς"],
   newTopic: ["New topic", "Νέο θέμα"],
+  topicLabel: ["Topic", "Θέμα"],
   topicPlaceholder: ["Barcelona, AI, iPhone", "Μπαρτσελόνα, AI, iPhone"],
   topicExists: ["You already have this topic.", "Αυτό το θέμα υπάρχει ήδη."],
   noTopics: ["Nothing here yet", "Τίποτα ακόμα"],
@@ -32,7 +35,8 @@ const STRINGS = {
 
   sourcesTitle: ["Following", "Ακολουθείτε"],
   newSource: ["New source", "Νέα πηγή"],
-  sourcePlaceholder: ["Site address, e.g. theverge.com", "Διεύθυνση site, π.χ. gazzetta.gr"],
+  sourceLabel: ["Site address", "Διεύθυνση site"],
+  sourcePlaceholder: ["e.g. theverge.com", "π.χ. gazzetta.gr"],
   sourceSearching: ["Looking for the site's articles…", "Ψάχνω τα άρθρα του site…"],
   sourceAdded: ["Source added", "Η πηγή προστέθηκε"],
   noFeed: ["No article feed was found on this site.", "Δεν βρέθηκε ροή άρθρων σε αυτό το site."],

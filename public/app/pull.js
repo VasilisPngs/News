@@ -1,213 +1,114 @@
-import { svg } from "./dom.js";
+import { loadingIndicator } from "./dom.js";
 
-const ZONE = 60;
-const RADIUS = 15;
-const RAYS = 8;
-const START = 40;
-const SPAN = 110;
-const STEP_MS = 125;
-const TURN_MS = 1000;
-const HOLD_MS = 800;
-
-const view = document.getElementById("view");
-const clamp = (value) => Math.min(1, Math.max(0, value));
+const THRESHOLD = 80;
+const DRAG = 0.5;
+const SIZE = 48;
+const REST = 16;
 
 let key = null;
 let handler = null;
-let touching = false;
-let forming = false;
-let running = false;
-let held = false;
-let releasing = false;
-let started = 0;
+let start = null;
+let fraction = 0;
+let busy = false;
 let run = 0;
-let drops = 0;
-let frame = 0;
-let timer = 0;
 let indicator = null;
-let rays = [];
 
 function build() {
   if (indicator) return indicator;
-  const width = 0.23 * RADIUS;
-  const inner = 0.36 * RADIUS + width / 2;
-  const outer = RADIUS - width / 2;
-  rays = Array.from({ length: RAYS }, (_, index) => {
-    const angle = (index * (360 / RAYS) - 90) * (Math.PI / 180);
-    return svg("line", {
-      x1: (Math.cos(angle) * inner).toFixed(3),
-      y1: (Math.sin(angle) * inner).toFixed(3),
-      x2: (Math.cos(angle) * outer).toFixed(3),
-      y2: (Math.sin(angle) * outer).toFixed(3),
-      "stroke-width": width.toFixed(3)
-    });
-  });
-  indicator = svg("svg", { class: "pull", viewBox: `${-RADIUS} ${-RADIUS} ${2 * RADIUS} ${2 * RADIUS}` }, rays);
+  indicator = loadingIndicator({ contained: true, determinate: true });
+  indicator.classList.add("pull");
   document.body.append(indicator);
   return indicator;
 }
 
-function show(opacity, degrees, lift) {
+function offsetFor(value) {
+  const over = Math.min(2, Math.max(0, value - 1));
+  return THRESHOLD * Math.min(1, value) + THRESHOLD * (over - (over * over) / 4);
+}
+
+function place(distance, animate) {
   const node = build();
-  rays.forEach((ray, index) => ray.setAttribute("opacity", opacity(index).toFixed(3)));
-  node.style.transform = `translateY(${-lift}px) rotate(${degrees}deg)`;
-  node.classList.add("shown");
+  node.classList.toggle("settling", animate);
+  node.classList.toggle("shown", distance > 0);
+  node.style.transform = `translateY(${distance - SIZE}px)`;
 }
 
-function hide() {
-  indicator?.classList.remove("shown");
+function reset() {
+  start = null;
+  fraction = 0;
 }
 
-function stopLoop() {
-  cancelAnimationFrame(frame);
-  clearTimeout(timer);
-  frame = 0;
-  timer = 0;
-}
-
-function paintForming(distance) {
-  const progress = clamp((distance - START) / SPAN);
-  if (progress <= 0) {
-    hide();
-    return progress;
-  }
-  const lead = 1 - (1 - progress) ** 2;
-  const step = 0.25 * Math.min(1, 2 * (1 - progress));
-  show((index) => clamp(lead - index * step), 0, 0);
-  return progress;
-}
-
-function paintSpin() {
-  const lift = Math.max(0, scrollY);
-  if (lift >= ZONE) {
-    hide();
-    return false;
-  }
-  const elapsed = performance.now() - started;
-  const turn = Math.min(1, elapsed / TURN_MS);
-  const settle = turn * (2 - turn);
-  const head = Math.floor(elapsed / STEP_MS);
-  show((index) => 1 - ((((head - index) % RAYS) + RAYS) % RAYS) * 0.135 * settle, 180 * settle, lift);
-  return true;
-}
-
-function loop() {
-  frame = 0;
-  timer = 0;
-  if (!running || !paintSpin()) return;
-  const elapsed = performance.now() - started;
-  if (elapsed < TURN_MS) frame = requestAnimationFrame(loop);
-  else timer = setTimeout(loop, STEP_MS - (elapsed % STEP_MS));
-}
-
-function clear() {
-  held = false;
-  releasing = false;
-  view.style.transition = "";
-  view.style.transform = "";
-}
-
-function hold() {
-  drops += 1;
-  held = true;
-  view.style.transition = "none";
-  view.style.transform = "translateY(0px)";
-  view.getBoundingClientRect();
-  view.style.transition = `transform ${HOLD_MS}ms var(--ease-sheet)`;
-  view.style.transform = `translateY(${ZONE}px)`;
-}
-
-function drop(duration) {
-  const mine = ++drops;
-  if (scrollY >= ZONE) {
-    clear();
-    scrollTo({ top: scrollY - ZONE, behavior: "instant" });
-    return;
-  }
-  releasing = false;
-  view.style.transition = `transform ${duration} var(--ease-sheet)`;
-  view.style.transform = "translateY(0px)";
-  const wait = parseFloat(getComputedStyle(view).transitionDuration) * 1000 || 0;
+function finish(mine) {
+  if (mine !== run) return;
+  busy = false;
+  place(0, true);
   setTimeout(() => {
-    if (mine === drops) clear();
-  }, wait + 50);
+    if (!busy) indicator.stop();
+  }, 500);
 }
 
-function finish() {
-  running = false;
-  stopLoop();
-  hide();
-  if (!held) return;
-  if (touching) releasing = true;
-  else drop("var(--speed-spring)");
-}
-
-function begin() {
-  running = true;
-  forming = false;
-  started = performance.now();
+function refresh() {
+  busy = true;
   const mine = ++run;
-  loop();
+  place(REST + SIZE, true);
+  indicator.spin();
   Promise.resolve()
     .then(() => handler?.())
     .catch(() => {})
-    .finally(() => {
-      if (mine === run) finish();
-    });
-}
-
-function cancel() {
-  run += 1;
-  running = false;
-  forming = false;
-  stopLoop();
-  hide();
-  if (held) {
-    drops += 1;
-    clear();
-  }
-}
-
-function lift() {
-  touching = false;
-  if (running && !held) hold();
-  else if (releasing) drop(`${HOLD_MS}ms`);
+    .finally(() => finish(mine));
 }
 
 addEventListener(
   "touchstart",
-  () => {
-    touching = true;
+  (event) => {
+    if (!key || busy || scrollY > 0 || event.touches.length !== 1 || document.querySelector("dialog[open]")) return reset();
+    start = { x: event.touches[0].clientX, y: event.touches[0].clientY, vertical: null };
   },
   { passive: true }
 );
-addEventListener("touchend", lift, { passive: true });
-addEventListener("touchcancel", lift, { passive: true });
 
 addEventListener(
-  "scroll",
-  () => {
-    if (!key) return;
-    if (running) {
-      if (!paintSpin()) stopLoop();
-      else if (!frame && !timer) loop();
-      return;
+  "touchmove",
+  (event) => {
+    if (!start) return;
+    const dx = event.touches[0].clientX - start.x;
+    const dy = event.touches[0].clientY - start.y;
+    if (start.vertical === null) {
+      if (Math.max(Math.abs(dx), Math.abs(dy)) <= 6) return;
+      start.vertical = Math.abs(dy) > Math.abs(dx) && dy > 0;
     }
-    const distance = Math.max(0, -scrollY);
-    if (touching && distance > 0) forming = true;
-    if (!forming) return;
-    if (distance === 0 && !touching) {
-      forming = false;
-      hide();
-      return;
+    if (!start.vertical || scrollY > 0) {
+      if (fraction) place(0, true);
+      return reset();
     }
-    if (paintForming(distance) >= 1 && touching) begin();
+    fraction = Math.max(0, dy * DRAG) / THRESHOLD;
+    build().progress(fraction);
+    place(offsetFor(fraction), false);
   },
   { passive: true }
 );
 
-export function setPull(next, refresh) {
-  if (next !== key) cancel();
+function release() {
+  if (!start) return;
+  const ready = fraction >= 1;
+  reset();
+  if (ready) refresh();
+  else place(0, true);
+}
+
+addEventListener("touchend", release, { passive: true });
+addEventListener("touchcancel", release, { passive: true });
+
+export function setPull(next, refreshFeed) {
+  if (next !== key) {
+    run += 1;
+    busy = false;
+    reset();
+    if (indicator) {
+      indicator.stop();
+      place(0, false);
+    }
+  }
   key = next;
-  handler = next ? refresh : null;
+  handler = next ? refreshFeed : null;
 }

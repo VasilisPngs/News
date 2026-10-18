@@ -2,7 +2,7 @@ import { readLocal, writeLocal } from "./storage.js";
 
 const STORAGE_KEY = "news.theme";
 const MODES = ["system", "light", "dark"];
-const COLORS = { light: "#f2f2f7", dark: "#000000" };
+const COLORS = { light: "#faf9fe", dark: "#0d0e12" };
 
 const query = matchMedia("(prefers-color-scheme: light)");
 

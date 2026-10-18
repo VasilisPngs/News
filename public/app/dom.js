@@ -28,27 +28,102 @@ export function svg(tag, props = {}, children = []) {
   return node;
 }
 
-const ICON_PATHS = {
-  check: "M6 13.1L10.2 18L18 6",
-  close: "M6.5 6.5l11 11M17.5 6.5l-11 11",
-  plus: "M12 5v14M5 12h14",
-  chevron: "M9.5 6l6 6-6 6",
-  back: "M14.5 6l-6 6 6 6",
-  pencil: "M4 20l1-4.5L15.5 5a2.12 2.12 0 0 1 3 3L8 18.5zM13.5 7l3 3",
-  trash: "M4.5 6.5h15M9.5 6.5v-2c0-.6.4-1 1-1h3c.6 0 1 .4 1 1v2M6.5 6.5l.9 12.6c.1.8.7 1.4 1.5 1.4h6.2c.8 0 1.4-.6 1.5-1.4l.9-12.6M10 10.5v6M14 10.5v6",
-  grip: "M1.83 7.25h20.34M1.83 12h20.34M1.83 16.75h20.34",
-  bookmark: "M7 4.5h10c.3 0 .5.2.5.5v14.3l-5.5-3.8-5.5 3.8V5c0-.3.2-.5.5-.5z",
-  sparkles: "M12 3.5l1.9 5.1 5.1 1.9-5.1 1.9L12 17.5l-1.9-5.1L5 10.5l5.1-1.9zM18.5 15.5l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8z",
-  newspaper: "M4.5 5.5c0-.6.4-1 1-1h10c.6 0 1 .4 1 1v13.5c0 .8.7 1.5 1.5 1.5H6.5c-1.1 0-2-.9-2-2zM16.5 9.5h2c.6 0 1 .4 1 1V19c0 .8-.7 1.5-1.5 1.5M7.5 8h6M7.5 11.5h6M7.5 15h4"
+const ICONS = {
+  check: "m382-354 339-339q12-12 28-12t28 12q12 12 12 28.5T777-636L410-268q-12 12-28 12t-28-12L182-440q-12-12-11.5-28.5T183-497q12-12 28.5-12t28.5 12l142 143Z",
+  add: "M440-440H240q-17 0-28.5-11.5T200-480q0-17 11.5-28.5T240-520h200v-200q0-17 11.5-28.5T480-760q17 0 28.5 11.5T520-720v200h200q17 0 28.5 11.5T760-480q0 17-11.5 28.5T720-440H520v200q0 17-11.5 28.5T480-200q-17 0-28.5-11.5T440-240v-200Z",
+  chevron: "M504-480 348-636q-11-11-11-28t11-28q11-11 28-11t28 11l184 184q6 6 8.5 13t2.5 15q0 8-2.5 15t-8.5 13L404-268q-11 11-28 11t-28-11q-11-11-11-28t11-28l156-156Z",
+  back: "m313-440 196 196q12 12 11.5 28T508-188q-12 11-28 11.5T452-188L188-452q-6-6-8.5-13t-2.5-15q0-8 2.5-15t8.5-13l264-264q11-11 27.5-11t28.5 11q12 12 12 28.5T508-715L313-520h447q17 0 28.5 11.5T800-480q0 17-11.5 28.5T760-440H313Z",
+  trash: "M280-120q-33 0-56.5-23.5T200-200v-520q-17 0-28.5-11.5T160-760q0-17 11.5-28.5T200-800h160q0-17 11.5-28.5T400-840h160q17 0 28.5 11.5T600-800h160q17 0 28.5 11.5T800-760q0 17-11.5 28.5T760-720v520q0 33-23.5 56.5T680-120H280Zm400-600H280v520h400v-520ZM400-280q17 0 28.5-11.5T440-320v-280q0-17-11.5-28.5T400-640q-17 0-28.5 11.5T360-600v280q0 17 11.5 28.5T400-280Zm160 0q17 0 28.5-11.5T600-320v-280q0-17-11.5-28.5T560-640q-17 0-28.5 11.5T520-600v280q0 17 11.5 28.5T560-280ZM280-720v520-520Z",
+  grip: "M200-360q-17 0-28.5-11.5T160-400q0-17 11.5-28.5T200-440h560q17 0 28.5 11.5T800-400q0 17-11.5 28.5T760-360H200Zm0-160q-17 0-28.5-11.5T160-560q0-17 11.5-28.5T200-600h560q17 0 28.5 11.5T800-560q0 17-11.5 28.5T760-520H200Z",
+  bookmark: "m480-240-168 72q-40 17-76-6.5T200-241v-519q0-33 23.5-56.5T280-840h400q33 0 56.5 23.5T760-760v519q0 43-36 66.5t-76 6.5l-168-72Zm0-88 200 86v-518H280v518l200-86Zm0-432H280h400-200Z",
+  bookmarkFilled: "m480-240-168 72q-40 17-76-6.5T200-241v-519q0-33 23.5-56.5T280-840h400q33 0 56.5 23.5T760-760v519q0 43-36 66.5t-76 6.5l-168-72Z",
+  sparkles: "m706-706-70-32q-6-3-8.5-8t-2.5-10q0-5 2.5-10t8.5-8l70-32 32-70q3-6 8-9t10-3q5 0 10 3t8 9l32 70 70 32q6 3 9 8t3 10q0 5-3 10t-9 8l-70 32-32 70q-3 6-8 8.5t-10 2.5q-5 0-10-2.5t-8-8.5l-32-70ZM260-380l-160-73q-9-4-13-11.5T83-480q0-8 4-15.5t13-11.5l160-73 73-160q4-9 11.5-13t15.5-4q8 0 15.5 4t11.5 13l73 160 160 73q9 4 13 11.5t4 15.5q0 8-4 15.5T620-453l-160 73-73 160q-4 9-11.5 13t-15.5 4q-8 0-15.5-4T333-220l-73-160Zm100 26 40-86 86-40-86-40-40-86-40 86-86 40 86 40 40 86Zm350 204-70-32q-6-3-9-8t-3-10q0-5 3-10t9-8l70-32 32-70q3-6 8-9t10-3q5 0 10 3t8 9l32 70 70 32q6 3 9 8t3 10q0 5-3 10t-9 8l-70 32-32 70q-3 6-8 9t-10 3q-5 0-10-3t-8-9l-32-70ZM360-480Z",
+  newspaper: "M160-120q-33 0-56.5-23.5T80-200v-616q0-7 6-9.5t11 2.5l50 50 52-53q6-6 14-6t14 6l53 53 53-53q6-6 14-6t14 6l52 53 53-53q6-6 14-6t14 6l53 53 52-53q6-6 14-6t14 6l53 53 53-53q6-6 14-6t14 6l52 53 50-50q5-5 11-2.5t6 9.5v616q0 33-23.5 56.5T800-120H160Zm0-80h280v-240H160v240Zm360 0h280v-80H520v80Zm0-160h280v-80H520v80ZM160-520h640v-120H160v120Z"
 };
 
-export function spinner() {
-  return el("div", { class: "spinner" }, el("div", { class: "spinner-wheel" }, Array.from({ length: 8 }, (_, index) => el("span", { style: `transform: rotate(${index * 45}deg); animation-delay: ${-((8 - index) % 8) * 125}ms` }))));
+export function icon(name) {
+  return svg("svg", { class: "icon", viewBox: "0 -960 960 960", "data-icon": name }, svg("path", { d: ICONS[name] }));
 }
 
-export function icon(name) {
-  return svg("svg", { class: "icon", viewBox: "0 0 24 24", "data-icon": name }, svg("path", { d: ICON_PATHS[name] }));
+export const iconButton = (name, onClick, props = {}) => el("button", { class: "icon-btn", type: "button", onclick: onClick, ...props }, icon(name));
+
+const TAU = Math.PI * 2;
+const POINTS = 96;
+const SIZE = 48;
+const RADIUS = 19;
+const MORPH_MS = 650;
+const TURN_MS = 4666;
+
+const wave = (count, depth, power) => (angle) => 1 - depth * ((1 - Math.cos(count * angle)) / 2) ** power;
+const polygon = (count, round) => (angle) => {
+  const step = TAU / count;
+  const local = (((angle % step) + step) % step) - step / 2;
+  const radius = Math.cos(Math.PI / count) / Math.cos(local);
+  return radius + (1 - radius) * round;
+};
+const oval = (ratio, power, tilt) => (angle) => {
+  const x = Math.abs(Math.cos(angle - tilt));
+  const y = Math.abs(Math.sin(angle - tilt)) / ratio;
+  return (x ** power + y ** power) ** (-1 / power);
+};
+const circle = () => 1;
+
+const SEQUENCE = [wave(10, 0.3, 0.6), wave(9, 0.12, 1.6), polygon(5, 0.2), oval(0.58, 3.2, Math.PI / 4), wave(8, 0.14, 0.7), wave(4, 0.2, 1.8), oval(0.72, 2, -Math.PI / 4)];
+
+function settle(seconds) {
+  const omega = Math.sqrt(200);
+  const decay = 0.6 * omega;
+  const damped = omega * 0.8;
+  return 1 - Math.exp(-decay * seconds) * (Math.cos(damped * seconds) + (decay / damped) * Math.sin(damped * seconds));
 }
+
+function outline(from, to, progress, turn) {
+  let d = "";
+  for (let index = 0; index < POINTS; index += 1) {
+    const angle = (index / POINTS) * TAU;
+    const radius = RADIUS * Math.max(0, from(angle) + (to(angle) - from(angle)) * progress);
+    const x = SIZE / 2 + radius * Math.cos(angle + turn);
+    const y = SIZE / 2 + radius * Math.sin(angle + turn);
+    d += `${index ? "L" : "M"}${x.toFixed(2)} ${y.toFixed(2)}`;
+  }
+  return `${d}Z`;
+}
+
+export function loadingIndicator({ contained = false, determinate = false } = {}) {
+  const path = svg("path");
+  const node = el("div", { class: contained ? "loading-indicator contained" : "loading-indicator" }, svg("svg", { viewBox: `0 0 ${SIZE} ${SIZE}` }, path));
+  let frame = 0;
+  let started = 0;
+  const draw = (now) => {
+    frame = 0;
+    if (!node.isConnected && started) return;
+    if (!started) started = now;
+    const elapsed = now - started;
+    const step = Math.floor(elapsed / MORPH_MS);
+    const progress = settle((elapsed % MORPH_MS) / 1000);
+    const turn = ((step + progress) * TAU) / 4 + (elapsed / TURN_MS) * TAU;
+    path.setAttribute("d", outline(SEQUENCE[step % SEQUENCE.length], SEQUENCE[(step + 1) % SEQUENCE.length], progress, turn));
+    frame = requestAnimationFrame(draw);
+  };
+  node.progress = (value) => {
+    const amount = Math.min(1, Math.max(0, value));
+    path.setAttribute("d", outline(circle, SEQUENCE[0], amount, (-amount * Math.PI) + Math.PI / 10));
+  };
+  node.spin = () => {
+    if (frame) return;
+    started = 0;
+    frame = requestAnimationFrame(draw);
+  };
+  node.stop = () => {
+    cancelAnimationFrame(frame);
+    frame = 0;
+  };
+  if (determinate) node.progress(0);
+  else node.spin();
+  return node;
+}
+
+export const loading = () => el("div", { class: "loading" }, loadingIndicator());
 
 export function sortable(list, onSort) {
   list.addEventListener("pointerdown", (event) => {
@@ -58,7 +133,7 @@ export function sortable(list, onSort) {
     const rows = [...list.children];
     const row = rows.find((child) => child.contains(handle));
     const from = rows.indexOf(row);
-    const step = row.offsetHeight;
+    const step = row.offsetHeight + parseFloat(getComputedStyle(list).rowGap || 0);
     const startY = event.clientY;
     const startScroll = scrollY;
     let pointerY = startY;
@@ -73,12 +148,11 @@ export function sortable(list, onSort) {
         if (other === row) return;
         const shift = position > from && position <= to ? -step : position < from && position >= to ? step : 0;
         other.style.transform = shift ? `translateY(${shift}px)` : "";
-        other.classList.toggle("lead", from === 0 && to > 0 && position === 1);
       });
     };
     const edge = () => {
       const top = rootLength("--topbar") + step;
-      const bottom = innerHeight - rootLength("--tabbar") - step;
+      const bottom = innerHeight - rootLength("--navbar") - step;
       const speed = pointerY < top ? pointerY - top : pointerY > bottom ? pointerY - bottom : 0;
       if (speed) {
         scrollBy(0, speed / 4);
@@ -97,10 +171,7 @@ export function sortable(list, onSort) {
       handle.removeEventListener("pointercancel", end);
       const dy = offset();
       list.classList.add("settling");
-      for (const other of rows) {
-        other.classList.remove("lead");
-        if (other !== row) other.style.removeProperty("transform");
-      }
+      for (const other of rows) if (other !== row) other.style.removeProperty("transform");
       if (to !== from) list.insertBefore(row, to > from ? rows[to].nextSibling : rows[to]);
       row.style.transform = `translateY(${dy - (to - from) * step}px)`;
       row.getBoundingClientRect();
@@ -111,7 +182,7 @@ export function sortable(list, onSort) {
         list.classList.remove("sorting");
         if (to !== from) onSort([...list.children].map((node) => node.dataset.key));
         list.dispatchEvent(new Event("swipeend", { bubbles: true }));
-      }, 260);
+      }, 360);
     };
     handle.setPointerCapture(event.pointerId);
     list.classList.add("sorting");
@@ -128,16 +199,8 @@ export function emptyState(symbol, title, message, action) {
   return el("div", { class: "empty" }, [icon(symbol), el("strong", { text: title }), el("p", { text: message }), action]);
 }
 
-const NATIVE_SWITCH = "switch" in HTMLInputElement.prototype;
-
 export function switchInput(checked, onChange) {
-  return el("input", {
-    type: "checkbox",
-    switch: true,
-    class: NATIVE_SWITCH ? "switch-input native" : "switch-input",
-    checked,
-    onchange: (event) => onChange(event.target.checked)
-  });
+  return el("input", { type: "checkbox", class: "switch", checked, onchange: (event) => onChange(event.target.checked) });
 }
 
 const SWIPE_REVEAL = 96;
@@ -151,17 +214,7 @@ document.addEventListener(
   true
 );
 
-export const editHide = (node) => el("div", { class: "edit-hide" }, el("div", {}, node));
-
-export const editMode = () => Boolean(history.state && history.state.editing);
-
-export function setEditMode(view, on) {
-  if (!on && openSwipe) openSwipe.close();
-  history.replaceState({ ...history.state, editing: on }, "");
-  view.toggleAttribute("data-editing", on);
-}
-
-export function swipeAction(content, label, onAction, confirm) {
+export function swipeAction(content, label, onAction) {
   const action = el("button", { class: "swipe-action", type: "button", text: label });
   const wrap = el("div", { class: "swipe" }, [action, content]);
   let offset = 0;
@@ -182,23 +235,20 @@ export function swipeAction(content, label, onAction, confirm) {
   };
   const close = () => {
     move(0, true);
-    wrap.classList.remove("revealed");
     if (openSwipe && openSwipe.wrap === wrap) openSwipe = null;
   };
-  wrap.reveal = () => {
+  const reveal = () => {
     if (openSwipe && openSwipe.wrap !== wrap) openSwipe.close();
     move(-SWIPE_REVEAL, true);
-    wrap.classList.add("revealed");
     openSwipe = { wrap, close };
   };
   const commit = async () => {
-    if (confirm && !(await confirm(wrap))) return close();
     openSwipe = null;
     move(-wrap.offsetWidth, true);
     const collapse = wrap.animate([{ height: `${wrap.offsetHeight}px`, opacity: 1 }, { height: "0px", opacity: 0 }], {
-      duration: 260,
-      delay: 140,
-      easing: "cubic-bezier(0.22, 0.61, 0.36, 1)",
+      duration: 300,
+      delay: 120,
+      easing: "cubic-bezier(0.2, 0, 0, 1)",
       fill: "forwards"
     });
     await collapse.finished;
@@ -213,7 +263,7 @@ export function swipeAction(content, label, onAction, confirm) {
   });
   action.addEventListener("click", commit);
   wrap.addEventListener("pointerdown", (event) => {
-    if (event.pointerType === "mouse" || event.target === action || event.target.closest(".drag-handle")) return;
+    if (event.pointerType === "mouse" || event.target === action) return;
     start = { x: event.clientX, y: event.clientY, from: offset, id: event.pointerId };
     dragging = false;
   });
@@ -240,7 +290,7 @@ export function swipeAction(content, label, onAction, confirm) {
       swallow = false;
     }, 0);
     if (offset < -Math.max(SWIPE_REVEAL * 2, wrap.offsetWidth * 0.55)) return commit();
-    if (offset < -SWIPE_REVEAL / 2) return wrap.reveal();
+    if (offset < -SWIPE_REVEAL / 2) return reveal();
     close();
   };
   wrap.addEventListener("pointerup", release);
@@ -270,6 +320,10 @@ function edgeFade(strip) {
   return strip;
 }
 
+export const filterChip = (label, selected, onClick) => el("button", { class: selected ? "chip on" : "chip", type: "button", onclick: onClick }, [selected ? icon("check") : null, label]);
+
+export const assistChip = (label, onClick) => el("button", { class: "chip assist", type: "button", onclick: onClick }, [icon("add"), label]);
+
 export function chipStrip(chips) {
   const strip = el("div", { class: "chips" }, chips);
   requestAnimationFrame(() => {
@@ -281,9 +335,9 @@ export function chipStrip(chips) {
   return edgeFade(strip);
 }
 
-export function toast(message) {
-  const host = document.getElementById("toast-host");
-  const node = el("div", { class: "toast", text: message });
+export function snackbar(message) {
+  const host = document.getElementById("snackbar-host");
+  const node = el("div", { class: "snackbar", text: message });
   if (host.matches(":popover-open")) host.hidePopover();
   host.append(node);
   host.showPopover();
@@ -295,7 +349,7 @@ export function toast(message) {
     node.classList.add("leaving");
     node.addEventListener("transitionend", drop, { once: true });
     setTimeout(drop, 600);
-  }, 2200);
+  }, 4000);
 }
 
 let lockedAt = null;
@@ -317,60 +371,12 @@ function unlockPage(app) {
   scrollTo({ top, behavior: "instant" });
 }
 
-function dragToClose(sheet, close) {
-  let drag = null;
-  const settle = () => {
-    sheet.style.removeProperty("transition");
-    sheet.style.removeProperty("transform");
-  };
-  sheet.addEventListener(
-    "touchstart",
-    (event) => {
-      drag = event.touches.length === 1 && !event.target.closest("textarea") ? { y: event.touches[0].clientY, dy: 0, v: 0, at: event.timeStamp, active: false } : null;
-    },
-    { passive: true }
-  );
-  sheet.addEventListener(
-    "touchmove",
-    (event) => {
-      if (!drag) return;
-      const dy = event.touches[0].clientY - drag.y;
-      if (!drag.active) {
-        if (sheet.scrollTop > 0 || dy < -6) drag = null;
-        if (!drag || dy < 6) return;
-        drag.active = true;
-        sheet.style.transition = "none";
-      }
-      event.preventDefault();
-      const next = Math.max(0, dy);
-      drag.v = (next - drag.dy) / Math.max(1, event.timeStamp - drag.at);
-      drag.at = event.timeStamp;
-      drag.dy = next;
-      sheet.style.transform = `translateY(${next}px)`;
-    },
-    { passive: false }
-  );
-  const release = (event) => {
-    const flick = drag && drag.v > 0.5 && event.timeStamp - drag.at < 100;
-    const done = drag && drag.active && (drag.dy > Math.min(sheet.offsetHeight / 2, 200) || flick);
-    const moved = drag && drag.active;
-    drag = null;
-    if (!moved) return;
-    settle();
-    if (done) close();
-  };
-  sheet.addEventListener("touchend", release);
-  sheet.addEventListener("touchcancel", () => {
-    if (drag && drag.active) settle();
-    drag = null;
-  });
-}
+const rootLength = (name) => parseFloat(getComputedStyle(document.documentElement).getPropertyValue(name)) || 0;
 
-export function openSheet(build, onClose, focusAlways = false) {
-  const host = document.getElementById("sheet-host");
+export function openDialog(build, onClose) {
+  const host = document.getElementById("dialog-host");
   const app = document.getElementById("app");
-  const sheet = el("div", { class: "sheet" }, el("div", { class: "sheet-grabber" }));
-  const dialog = el("dialog", { class: "sheet-backdrop", tabIndex: -1 }, sheet);
+  const dialog = el("dialog", { class: "dialog", tabIndex: -1 });
   let closed = false;
   const close = () => {
     if (closed) return;
@@ -381,11 +387,11 @@ export function openSheet(build, onClose, focusAlways = false) {
       dialog.close();
       dialog.remove();
     };
-    sheet.addEventListener("transitionend", (event) => {
-      if (event.target === sheet) finish();
+    dialog.addEventListener("transitionend", (event) => {
+      if (event.target === dialog) finish();
     });
-    setTimeout(finish, 700);
-    if (!host.querySelector(".sheet-backdrop:not(.closing)")) unlockPage(app);
+    setTimeout(finish, 400);
+    if (!host.querySelector(".dialog:not(.closing)")) unlockPage(app);
     if (onClose) onClose();
   };
   dialog.addEventListener("cancel", (event) => {
@@ -396,147 +402,100 @@ export function openSheet(build, onClose, focusAlways = false) {
   dialog.addEventListener("click", (event) => {
     if (event.target === dialog) close();
   });
-  dragToClose(sheet, close);
-  append(sheet, build(close));
-  const field = sheet.querySelector("input, select, textarea");
+  append(dialog, build(close));
   host.append(dialog);
   lockPage(app);
   dialog.showModal();
-  (field && (focusAlways || !matchMedia("(pointer: coarse)").matches) ? field : dialog).focus();
+  const field = dialog.querySelector("input:not([type=radio])");
+  (field || dialog).focus();
   return close;
 }
 
-function menuItem(item, close) {
-  const content = [
-    item.icon ? icon(item.icon) : null,
-    el("span", { class: "menu-label" }, [el("span", { text: item.label }), item.detail ? el("span", { class: "menu-detail", text: item.detail }) : null])
-  ];
-  if (item.options) {
-    const chevron = icon("chevron");
-    chevron.classList.add("menu-chevron");
-    return el("label", { class: "menu-item more" }, [
-      ...content,
-      chevron,
-      el(
-        "select",
-        { class: "menu-select", onchange: (event) => close(() => item.onSelect(event.target.value)) },
-        item.options.map((option) => el("option", option))
-      )
-    ]);
-  }
-  const classes = ["menu-item", item.icon ? null : "plain", item.danger ? "danger" : null].filter(Boolean).join(" ");
-  return el("button", { class: classes, type: "button", disabled: item.disabled, onclick: () => close(item.onSelect) }, content);
-}
+const dialogActions = (buttons) => el("div", { class: "dialog-actions" }, buttons);
 
-const rootLength = (name) => parseFloat(getComputedStyle(document.documentElement).getPropertyValue(name)) || 0;
+const textButton = (label, props = {}) => el("button", { class: "btn text", type: "button", text: label, ...props });
 
-export function popMenu(anchor, sections, { title, message, onClose, cover = true } = {}) {
-  const host = document.getElementById("sheet-host");
-  const box = anchor.getBoundingClientRect();
-  const dialog = el("dialog", { class: "menu-backdrop", tabIndex: -1 });
-  let closed = false;
-  const close = (after) => {
-    if (closed) return;
-    closed = true;
-    dialog.classList.add("closing");
-    anchor.classList.remove("menu-anchor");
-    let done = false;
-    const finish = () => {
-      if (done) return;
-      done = true;
-      dialog.close();
-      dialog.remove();
-      if (after) after();
-      if (onClose) onClose();
-    };
-    menu.addEventListener("transitionend", (event) => {
-      if (event.target === menu) finish();
-    });
-    setTimeout(finish, 400);
-  };
-  const menu = el("div", { class: "menu" }, [
-    title ? el("div", { class: "menu-head" }, [el("strong", { text: title }), message ? el("span", { text: message }) : null]) : null,
-    ...sections.map((items) => el("div", { class: "menu-section" }, items.map((item) => menuItem(item, close))))
-  ]);
-  const width = document.documentElement.clientWidth;
-  if (box.left + box.width / 2 < width / 2) {
-    menu.style.left = `${box.left}px`;
-    menu.classList.add("from-left");
-  } else {
-    menu.style.right = `${width - box.right}px`;
-  }
-  dialog.append(menu);
-  dialog.addEventListener("cancel", (event) => {
-    event.preventDefault();
-    close();
-  });
-  dialog.addEventListener("pointerdown", (event) => {
-    if (event.target === dialog) close();
-  });
-  host.append(dialog);
-  if (cover) anchor.classList.add("menu-anchor");
-  dialog.showModal();
-  dialog.focus();
-  const top = cover ? box.top : box.bottom + 8;
-  const bottom = cover ? box.bottom : box.top - 8;
-  const below = innerHeight - rootLength("--tabbar") - 8 - top;
-  const above = bottom - rootLength("--topbar") - 8;
-  if (menu.offsetHeight > below && above > below) {
-    menu.style.bottom = `${innerHeight - bottom}px`;
-    menu.classList.add("from-bottom");
-  } else {
-    menu.style.top = `${top}px`;
-  }
-}
-
-export function confirmAction(anchor, title, message, label, destructive = true) {
-  return new Promise((resolve) => {
-    popMenu(anchor, [[{ icon: destructive ? "trash" : null, label, danger: destructive, onSelect: () => resolve(true) }]], {
-      title,
-      message,
-      cover: false,
-      onClose: () => resolve(false)
-    });
-  });
-}
-
-export function sheetBar(title, close, done) {
-  return el("div", { class: "sheet-bar" }, [
-    close ? el("button", { class: "bar-btn", type: "button", onclick: close }, icon("close")) : el("span"),
-    el("h2", { text: title }),
-    done || el("span")
-  ]);
-}
-
-export const checkButton = (props) => el("button", { class: "bar-btn primary", type: "submit", ...props }, icon("check"));
-
-export function promptSheet(title, value, options = {}) {
+export function promptDialog(title, value, { label, hint, action, cancel, required, invalid } = {}) {
   return new Promise((resolve) => {
     let answer = null;
-    openSheet(
+    openDialog(
       (close) => {
-        const done = checkButton();
-        const field = options.multiline
-          ? el("textarea", { value: value || "", placeholder: options.placeholder })
-          : el("input", { type: "text", autocomplete: "off", value: value || "", placeholder: options.placeholder, enterKeyHint: "done" });
+        const done = textButton(action, { type: "submit" });
+        const input = el("input", { type: "text", autocomplete: "off", value: value || "", placeholder: hint || " ", enterKeyHint: "done" });
         const initial = (value || "").trim();
         const check = () => {
-          const next = field.value.trim();
-          done.disabled = next === initial || (options.required && !next) || Boolean(options.invalid && options.invalid(next));
+          const next = input.value.trim();
+          done.disabled = next === initial || (required && !next) || Boolean(invalid && invalid(next));
         };
-        field.addEventListener("input", check);
+        input.addEventListener("input", check);
         check();
-        return el("form", {
-          onsubmit: (event) => {
-            event.preventDefault();
-            if (done.disabled) return;
-            answer = field.value.trim();
-            close();
-          }
-        }, [sheetBar(title, close, done), field]);
+        return el(
+          "form",
+          {
+            onsubmit: (event) => {
+              event.preventDefault();
+              if (done.disabled) return;
+              answer = input.value.trim();
+              close();
+            }
+          },
+          [el("h2", { text: title }), el("label", { class: "field" }, [input, el("span", { text: label })]), dialogActions([textButton(cancel, { onclick: close }), done])]
+        );
       },
-      () => resolve(answer),
-      true
+      () => resolve(answer)
+    );
+  });
+}
+
+export function confirmDialog(title, message, action, cancel) {
+  return new Promise((resolve) => {
+    let answer = false;
+    openDialog(
+      (close) => [
+        el("h2", { text: title }),
+        el("p", { text: message }),
+        dialogActions([
+          textButton(cancel, { onclick: close }),
+          textButton(action, {
+            onclick: () => {
+              answer = true;
+              close();
+            }
+          })
+        ])
+      ],
+      () => resolve(answer)
+    );
+  });
+}
+
+export function chooseDialog(title, options, current) {
+  return new Promise((resolve) => {
+    let answer = null;
+    openDialog(
+      (close) => [
+        el("h2", { text: title }),
+        el(
+          "div",
+          { class: "choices" },
+          options.map((option) =>
+            el("label", { class: "choice" }, [
+              el("input", {
+                type: "radio",
+                class: "radio",
+                name: "choice",
+                checked: option.value === current,
+                onchange: () => {
+                  answer = option.value;
+                  setTimeout(close, 150);
+                }
+              }),
+              el("span", { text: option.label })
+            ])
+          )
+        )
+      ],
+      () => resolve(answer)
     );
   });
 }

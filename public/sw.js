@@ -1,4 +1,4 @@
-const VERSION = "v15";
+const VERSION = "v16";
 const CACHE = `news-${VERSION}`;
 
 const SHELL = [
@@ -21,7 +21,10 @@ const SHELL = [
   "/app/views/sources.js",
   "/app/views/saved.js",
   "/app/views/settings.js",
-  "/icons/icon.svg"
+  "/icons/icon.svg",
+  "/fonts/google-sans-latin.woff2",
+  "/fonts/google-sans-latin-ext.woff2",
+  "/fonts/google-sans-greek.woff2"
 ];
 
 self.addEventListener("install", (event) => {

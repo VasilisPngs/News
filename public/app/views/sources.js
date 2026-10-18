@@ -1,4 +1,4 @@
-import { el, icon, emptyState, promptSheet, toast, chipStrip, spinner } from "../dom.js";
+import { el, iconButton, emptyState, promptDialog, snackbar, chipStrip, filterChip, loading } from "../dom.js";
 import { t, dayLabel, dayStart } from "../i18n.js";
 import { appState, feed, loadFeed, addSource, feedFailed } from "../store.js";
 import { readLocal, writeLocal } from "../storage.js";
@@ -9,30 +9,25 @@ const barActions = document.getElementById("bar-actions");
 const SOURCE_KEY = "news.source";
 
 export async function newSource() {
-  const url = await promptSheet(t("newSource"), "", { placeholder: t("sourcePlaceholder"), required: true });
+  const url = await promptDialog(t("newSource"), "", { label: t("sourceLabel"), hint: t("sourcePlaceholder"), action: t("add"), cancel: t("cancel"), required: true });
   if (!url) return;
-  toast(t("sourceSearching"));
+  snackbar(t("sourceSearching"));
   try {
     const added = await addSource(url);
     if (added) {
       writeLocal(SOURCE_KEY, null);
-      toast(t("sourceAdded"));
+      snackbar(t("sourceAdded"));
     }
   } catch (error) {
-    toast(error.code === "no_feed" ? t("noFeed") : t("actionFailed"));
+    snackbar(error.code === "no_feed" ? t("noFeed") : t("actionFailed"));
   }
 }
 
 function sourceChips(sources, active) {
   const chip = (id, label) =>
-    el("button", {
-      class: id === active ? "chip on" : "chip",
-      type: "button",
-      text: label,
-      onclick: () => {
-        writeLocal(SOURCE_KEY, id);
-        navigate("/following");
-      }
+    filterChip(label, id === active, () => {
+      writeLocal(SOURCE_KEY, id);
+      navigate("/following");
     });
   return chipStrip([chip(null, t("all")), ...sources.map((source) => chip(source.id, source.title))]);
 }
@@ -56,17 +51,17 @@ export function renderSources(container) {
   const { sources } = appState();
   const stored = readLocal(SOURCE_KEY);
   const active = sources.some((source) => source.id === stored) ? stored : null;
-  container.append(el("h1", { text: t("sourcesTitle") }));
-  barActions.append(el("button", { class: "bar-btn", type: "button", onclick: newSource }, icon("plus")));
+  container.dataset.title = t("sourcesTitle");
+  barActions.append(iconButton("add", newSource));
   if (sources.length === 0) {
-    container.append(page(emptyState("newspaper", t("noSources"), t("noSourcesHint"), el("button", { class: "btn primary", type: "button", text: t("newSource"), onclick: newSource }))));
+    container.append(page(emptyState("newspaper", t("noSources"), t("noSourcesHint"), el("button", { class: "btn", type: "button", text: t("newSource"), onclick: newSource }))));
     return;
   }
   if (sources.length > 1) container.append(el("div", { class: "list-bar" }, sourceChips(sources, active)));
   loadFeed("sources", active).catch(() => {});
   const current = feed("sources", active);
   if (!current && !feedFailed("sources", active)) {
-    container.append(spinner());
+    container.append(loading());
     return;
   }
   if (!current || current.items.length === 0) {
@@ -74,6 +69,6 @@ export function renderSources(container) {
     return;
   }
   for (const [day, items] of byDay(current.items)) {
-    container.append(el("section", { class: "group" }, [el("h2", { class: "prominent", text: dayLabel(day) }), articleList(items, "sources")]));
+    container.append(el("section", { class: "group" }, [el("h2", { text: dayLabel(day) }), articleList(items, "sources")]));
   }
 }

@@ -1,4 +1,4 @@
-import { el, icon, emptyState, promptSheet, toast, spinner } from "../dom.js";
+import { el, iconButton, emptyState, promptDialog, snackbar, loading, assistChip } from "../dom.js";
 import { t, categories } from "../i18n.js";
 import { appState, feed, loadFeed, addTopic, markSeen, feedFailed } from "../store.js";
 import { articleList } from "./articles.js";
@@ -53,12 +53,12 @@ addEventListener("visibilitychange", () => {
 });
 
 export async function newTopic() {
-  const name = await promptSheet(t("newTopic"), "", { placeholder: t("topicPlaceholder"), required: true });
+  const name = await promptDialog(t("newTopic"), "", { label: t("topicLabel"), hint: t("topicPlaceholder"), action: t("add"), cancel: t("cancel"), required: true });
   if (!name) return;
   try {
     await addTopic(name);
   } catch (error) {
-    toast(error.code === "duplicate" ? t("topicExists") : t("actionFailed"));
+    snackbar(error.code === "duplicate" ? t("topicExists") : t("actionFailed"));
   }
 }
 
@@ -66,14 +66,7 @@ export function categoryChips() {
   const taken = new Set(appState().topics.map((topic) => topic.name.toLocaleLowerCase()));
   const chips = categories()
     .filter((name) => !taken.has(name.toLocaleLowerCase()))
-    .map((name) =>
-      el("button", {
-        class: "chip",
-        type: "button",
-        text: name,
-        onclick: () => addTopic(name).catch(() => toast(t("actionFailed")))
-      })
-    );
+    .map((name) => assistChip(name, () => addTopic(name).catch(() => snackbar(t("actionFailed")))));
   return chips.length ? el("div", { class: "chips wrap" }, chips) : null;
 }
 
@@ -83,11 +76,11 @@ function page(state) {
 }
 
 export function renderForYou(container) {
-  container.append(el("h1", { text: t("forYouTitle") }));
-  barActions.append(el("button", { class: "bar-btn", type: "button", onclick: newTopic }, icon("plus")));
+  container.dataset.title = t("forYouTitle");
+  barActions.append(iconButton("add", newTopic));
   if (appState().topics.length === 0) {
     container.append(
-      page(emptyState("sparkles", t("noTopics"), t("noTopicsHint"), el("button", { class: "btn primary", type: "button", text: t("newTopic"), onclick: newTopic }))),
+      page(emptyState("sparkles", t("noTopics"), t("noTopicsHint"), el("button", { class: "btn", type: "button", text: t("newTopic"), onclick: newTopic }))),
       el("section", { class: "group" }, [el("h2", { text: t("categories") }), categoryChips()])
     );
     return;
@@ -95,7 +88,7 @@ export function renderForYou(container) {
   loadFeed("foryou").catch(() => {});
   const current = feed("foryou");
   if (!current && !feedFailed("foryou")) {
-    container.append(spinner());
+    container.append(loading());
     return;
   }
   if (!current || current.items.length === 0) {

@@ -1,14 +1,14 @@
-import { el, emptyState, spinner } from "../dom.js";
+import { el, emptyState, loading } from "../dom.js";
 import { t } from "../i18n.js";
 import { feed, loadFeed, feedFailed } from "../store.js";
 import { articleList } from "./articles.js";
 
 export function renderSaved(container) {
-  container.append(el("h1", { text: t("savedTitle") }));
+  container.dataset.title = t("savedTitle");
   loadFeed("saved").catch(() => {});
   const current = feed("saved");
   if (!current && !feedFailed("saved")) {
-    container.append(spinner());
+    container.append(loading());
     return;
   }
   if (!current || current.items.length === 0) {

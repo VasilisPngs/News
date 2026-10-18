@@ -1,4 +1,4 @@
-import { el, icon, swipeAction, toast } from "../dom.js";
+import { el, iconButton, swipeAction, snackbar } from "../dom.js";
 import { t, tn, ago } from "../i18n.js";
 import { markOpened, articleAction } from "../store.js";
 
@@ -17,16 +17,16 @@ function sourceIcon(article) {
 function meta(article) {
   const parts = [article.source, ago(article.published)];
   if (article.coverage > 1) parts.push(tn(article.coverage, "source"));
-  return el("span", { class: "tiny article-meta" }, [sourceIcon(article), el("span", { text: parts.filter(Boolean).join(" · ") })]);
+  return el("span", { class: "supporting article-meta" }, [sourceIcon(article), el("span", { text: parts.filter(Boolean).join(" · ") })]);
 }
 
 async function act(article, action) {
   try {
     await articleAction(article, action);
-    if (action === "less") toast(t("lessDone"));
+    if (action === "less") snackbar(t("lessDone"));
     return true;
   } catch {
-    toast(t("actionFailed"));
+    snackbar(t("actionFailed"));
     return false;
   }
 }
@@ -56,11 +56,11 @@ function articleRow(article, mode) {
       meta(article),
       thumbnail(article, content)
     ]),
-    el("button", { class: article.saved ? "row-save on" : "row-save", type: "button", onclick: () => act(article, article.saved ? "unsave" : "save") }, icon("bookmark"))
+    iconButton(article.saved ? "bookmarkFilled" : "bookmark", () => act(article, article.saved ? "unsave" : "save"), { class: article.saved ? "icon-btn selected" : "icon-btn" })
   );
   if (mode === "foryou") return swipeAction(content, t("less"), () => act(article, "less"));
   if (mode === "saved") return swipeAction(content, t("remove"), () => act(article, "unsave"));
   return content;
 }
 
-export const articleList = (items, mode) => el("div", { class: "card flush" }, el("div", { class: "list" }, items.map((article) => articleRow(article, mode))));
+export const articleList = (items, mode) => el("div", { class: "list" }, items.map((article) => articleRow(article, mode)));

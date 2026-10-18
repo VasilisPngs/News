@@ -92,7 +92,7 @@ export function startRouter(fn) {
     const href = link.getAttribute("href");
     if (!href || !href.startsWith("/")) return;
     event.preventDefault();
-    if (link.closest(".tabbar")) openTab(href);
+    if (link.closest(".navbar")) openTab(href);
     else if (href === location.pathname) scrollTo({ top: 0, behavior: "smooth" });
     else navigate(href);
   });

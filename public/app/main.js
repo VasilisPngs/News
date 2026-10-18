@@ -1,5 +1,5 @@
 import { el } from "./dom.js";
-import { startShell, scrollViewTop, watchBars, placeLens } from "./shell.js";
+import { startShell, scrollViewTop, watchBars } from "./shell.js";
 import { storeEvents, status, loadState, loadFeed, finishDwell, pullRefresh } from "./store.js";
 import { currentRoute, navigation, startRouter } from "./router.js";
 import { renderForYou } from "./views/foryou.js";
@@ -15,7 +15,7 @@ import { setPull } from "./pull.js";
 const view = document.getElementById("view");
 const barLead = document.getElementById("bar-lead");
 const barActions = document.getElementById("bar-actions");
-const tabs = [...document.querySelectorAll(".tab")];
+const tabs = [...document.querySelectorAll(".nav-item")];
 
 const VIEWS = {
   foryou: renderForYou,
@@ -57,10 +57,9 @@ function render() {
   const { restore, animate } = navigation();
   for (const tab of tabs) {
     tab.classList.toggle("current", tab.getAttribute("href") === route.tab);
-    const label = tab.querySelector("span");
+    const label = tab.querySelector(".nav-label");
     if (label) label.textContent = t(TAB_LABELS[tab.dataset.route]);
   }
-  placeLens(animate);
   const changed = key !== lastRouteKey;
   const from = DEPTH[lastRouteKey] || 0;
   const to = DEPTH[route.name] || 0;
@@ -96,7 +95,7 @@ function paintBanner() {
   if (auth && !banner) {
     banner = el("div", { class: "banner" }, [
       el("span", { text: t("sessionExpired") }),
-      el("button", { class: "btn small", type: "button", text: t("statusSignIn"), onclick: () => (location.href = `/?signin=${Date.now()}`) })
+      el("button", { class: "btn text", type: "button", text: t("statusSignIn"), onclick: () => (location.href = `/?signin=${Date.now()}`) })
     ]);
     document.body.append(banner);
   }
