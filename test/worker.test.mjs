@@ -480,6 +480,9 @@ test("a story your sources share in your topics is pushed once, at most three ti
   const pushes = await subscribed(env);
   const story = storyOf(env, "Λεβαντόφσκι");
   highlight(env, story);
+  env.DB.sqlite.prepare("INSERT INTO meta (key, value) VALUES ('threshold', ?)").run(`${now} 0.95`);
+  assert.equal(await notify(env, now, new Set([story])), null);
+  env.DB.sqlite.prepare("UPDATE meta SET value = ? WHERE key = 'threshold'").run(`${now - 3600000} 0.95`);
   assert.equal(await notify(env, now, new Set([story])), story);
   assert.equal(pushes.length, 1);
   assert.equal(pushes[0].body.web_push, 8030);

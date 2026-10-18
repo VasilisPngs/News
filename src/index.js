@@ -34,6 +34,7 @@ const NOTIFY_MIN_COVERAGE = 2;
 const NOTIFY_SPAN_MS = 12 * 3600000;
 const NOTIFY_FRESH_MS = 6 * 3600000;
 const NOTIFY_PERCENTILE = 0.7;
+const THRESHOLD_MS = 3600000;
 const NAME_MAX = 60;
 const MAX_PARAMS = 90;
 const WEIGHTS = { open: 0.5, read: 1.5, bounce: -1, save: 1, less: -1.5 };
@@ -406,22 +407,20 @@ async function feedRoute(request, env) {
   if (body.tab === "sources") {
     const owner = typeof body.source === "string" && body.source ? body.source : null;
     const rows = await env.DB.prepare(
-      `SELECT a.id, a.title, a.url, s.title AS source, s.icon, a.published_at, a.opened_at, a.saved_at, a.image FROM articles a JOIN sources s ON s.id = a.owner AND s.hidden = 0${owner ? " WHERE a.owner = ?2" : ""} ORDER BY a.published_at DESC LIMIT ?1`
+      `SELECT a.id, a.title, a.url, s.title AS source, s.icon, a.published_at, a.opened_at, a.saved_at, a.image FROM articles a JOIN sources s ON s.id = a.owner WHERE a.owner IN (SELECT id FROM sources WHERE hidden = 0${owner ? " AND id = ?2" : ""}) ORDER BY a.published_at DESC LIMIT ?1`
     )
       .bind(...(owner ? [SOURCES_LIMIT, owner] : [SOURCES_LIMIT]))
       .all();
     return json({ items: rows.results.map(item) });
   }
   const rows = await env.DB.prepare(
-    `SELECT id, title, url, source, icon, published_at, opened AS opened_at, saved AS saved_at, coverage, image, affinity, tokens, views FROM (
-      SELECT a.id, a.title, a.url, s.title AS source, s.icon, s.hidden, a.published_at, a.affinity, a.image, a.tokens,
-        MAX(a.opened_at) OVER same AS opened, MAX(a.saved_at) OVER same AS saved, MAX(a.views) OVER same AS views,
-        ROW_NUMBER() OVER (PARTITION BY a.story ORDER BY s.hidden DESC, a.affinity DESC, a.published_at DESC) AS place,
-        (SELECT COUNT(DISTINCT b.owner) FROM articles b WHERE b.story = a.story) AS coverage
+    `SELECT id, title, url, source, icon, published_at, opened AS opened_at, saved AS saved_at, (SELECT COUNT(DISTINCT b.owner) FROM articles b WHERE b.story = lead.story) AS coverage, image, affinity, tokens, views FROM (
+      SELECT a.id, a.title, a.url, a.story, s.title AS source, s.icon, s.hidden, a.published_at, a.affinity, a.image, a.tokens,
+        MAX(a.opened_at) OVER same AS opened, MAX(a.saved_at) OVER same AS saved, MAX(a.views) OVER same AS views, ROW_NUMBER() OVER same AS place
       FROM articles a JOIN sources s ON s.id = a.owner
       WHERE a.vector IS NOT NULL AND a.published_at > ?1 AND a.story NOT IN (SELECT story FROM articles WHERE hidden_at IS NOT NULL)
-      WINDOW same AS (PARTITION BY a.story)
-    ) WHERE place = 1 AND hidden = 1 AND opened IS NULL ORDER BY published_at DESC LIMIT ?2`
+      WINDOW same AS (PARTITION BY a.story ORDER BY s.hidden DESC, a.affinity DESC, a.published_at DESC ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING)
+    ) lead WHERE place = 1 AND hidden = 1 AND opened IS NULL ORDER BY published_at DESC LIMIT ?2`
   )
     .bind(now - WINDOW_MS, RESCORE_LIMIT)
     .all();
@@ -690,13 +689,22 @@ export async function refresh(env, now, { owner = null, limit = FEEDS_PER_RUN, h
   return { added: additions.length, touched };
 }
 
-async function threshold(env, now) {
+async function percentile(env, now) {
   const since = now - WINDOW_MS;
   const total = await env.DB.prepare("SELECT COUNT(*) AS n FROM articles WHERE vector IS NOT NULL AND published_at > ?1").bind(since).first("n");
   if (!total) return Infinity;
-  return env.DB.prepare("SELECT affinity FROM articles WHERE vector IS NOT NULL AND published_at > ?1 ORDER BY affinity LIMIT 1 OFFSET ?2")
+  const value = await env.DB.prepare("SELECT affinity FROM articles WHERE vector IS NOT NULL AND published_at > ?1 ORDER BY affinity LIMIT 1 OFFSET ?2")
     .bind(since, Math.min(total - 1, Math.floor(total * NOTIFY_PERCENTILE)))
     .first("affinity");
+  return value ?? Infinity;
+}
+
+async function threshold(env, now) {
+  const [at, value] = String((await getMeta(env, "threshold")) || "").split(" ");
+  if (now - Number(at) < THRESHOLD_MS) return Number(value);
+  const bar = await percentile(env, now);
+  await setMeta(env, "threshold", `${now} ${bar}`).run();
+  return bar;
 }
 
 export async function notify(env, now, touched) {
