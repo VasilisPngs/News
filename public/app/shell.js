@@ -36,6 +36,8 @@ function paintBars() {
   const root = document.documentElement;
   if (root.classList.contains("locked")) return;
   root.classList.toggle("scrolled", scrollY > 0);
+  const listBar = view.querySelector(".list-bar");
+  if (listBar) listBar.classList.toggle("stuck", scrollY > 0 && listBar.getBoundingClientRect().top <= parseFloat(getComputedStyle(listBar).top) + 0.5);
   const title = view.dataset.title || "";
   if (barTitle.textContent !== title) barTitle.textContent = title;
 }

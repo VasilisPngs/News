@@ -219,7 +219,7 @@ input:focus-visible {
   background: var(--md-surface-container);
 }
 
-.scrolled .list-bar {
+.list-bar.stuck {
   --bar: var(--md-surface-container);
 }
 
