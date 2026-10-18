@@ -40,13 +40,11 @@
   --md-secondary: light-dark(#575f72, #bfc6dc);
   --md-secondary-container: light-dark(#dbe2f9, #343b4d);
   --md-on-secondary-container: light-dark(#4a5264, #b7bfd5);
-  --md-error: light-dark(#a83836, #fa746f);
   --md-error-container: light-dark(#fa746f, #871f21);
   --md-on-error-container: light-dark(#6e0a12, #ff9993);
   --md-surface: light-dark(#faf9fe, #0d0e12);
   --md-on-surface: light-dark(#2f323a, #e3e5f0);
   --md-on-surface-variant: light-dark(#5c5f68, #a8abb5);
-  --md-surface-container-low: light-dark(#f3f3fa, #111318);
   --md-surface-container: light-dark(#ededf6, #171a1f);
   --md-surface-container-high: light-dark(#e7e7f1, #1d2026);
   --md-surface-container-highest: light-dark(#e0e2ed, #23262d);
@@ -54,7 +52,6 @@
   --md-outline-variant: light-dark(#afb1bc, #454850);
   --md-inverse-surface: light-dark(#0d0e12, #faf9fe);
   --md-inverse-on-surface: light-dark(#9c9ca2, #545559);
-  --md-scrim: #000000;
   --md-font: "Google Sans", system-ui, sans-serif;
   --md-fast-spatial: 359ms linear(0, 0.053, 0.1817, 0.3473, 0.5207, 0.6822, 0.8197, 0.928, 1.0062, 1.057, 1.0847, 1.0945, 1.0916, 1.0806, 1.0654, 1.0489, 1.0333, 1.0197, 1.0088, 1.0008, 0.9954, 0.9924, 0.9911, 0.9912, 0.9921, 0.9935, 0.995, 0.9965, 0.9979, 1);
   --md-default-spatial: 434ms linear(0, 0.0243, 0.0858, 0.1698, 0.2656, 0.365, 0.4623, 0.5538, 0.6371, 0.7108, 0.7748, 0.829, 0.874, 0.9107, 0.94, 0.9629, 0.9803, 0.9931, 1.0023, 1.0084, 1.0123, 1.0144, 1.0151, 1.015, 1.0142, 1.013, 1.0116, 1.0101, 1.0086, 1.0071, 1.0058, 1.0047, 1.0037, 1.0028, 1.0021, 1.0015, 1);
@@ -607,23 +604,27 @@ input:focus-visible {
   transition: transform var(--md-default-spatial);
 }
 
-.swipe-action {
+.swipe-background {
   position: absolute;
   inset: 0;
-  visibility: hidden;
-  border: 0;
-  border-radius: inherit;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
   padding: 0 24px;
-  background: var(--md-error-container);
-  color: var(--md-on-error-container);
-  font: 500 0.875rem/1.25rem var(--md-font);
-  letter-spacing: 0.006rem;
-  text-align: end;
-  cursor: pointer;
+  visibility: hidden;
+  border-radius: inherit;
+  background: var(--md-surface-container-highest);
+  color: var(--md-on-surface-variant);
+  transition: background-color var(--md-fast-effects), color var(--md-fast-effects);
 }
 
-.swiping > .swipe-action {
+.swiping > .swipe-background {
   visibility: visible;
+}
+
+.armed > .swipe-background {
+  background: var(--md-error-container);
+  color: var(--md-on-error-container);
 }
 
 .chips {

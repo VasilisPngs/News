@@ -15,7 +15,7 @@ let offline = false;
 
 const changed = () => storeEvents.dispatchEvent(new CustomEvent("changed"));
 
-export class ApiError extends Error {
+class ApiError extends Error {
   constructor(code, status) {
     super(code);
     this.code = code;

@@ -11,7 +11,6 @@ const STRINGS = {
 
   statusSignIn: ["Sign in", "Σύνδεση"],
   sessionExpired: ["Your Cloudflare Access session expired.", "Η σύνδεση στο Cloudflare Access έληξε."],
-  loadFailed: ["Couldn't refresh. Showing what was loaded last.", "Δεν έγινε ανανέωση. Βλέπεις ό,τι φορτώθηκε τελευταία."],
   actionFailed: ["That didn't go through. Try again.", "Δεν ολοκληρώθηκε. Δοκίμασε ξανά."],
 
   delete: ["Delete", "Διαγραφή"],
@@ -49,8 +48,6 @@ const STRINGS = {
   noSaved: ["Nothing saved", "Κανένα αποθηκευμένο"],
   noSavedHint: ["Tap the bookmark on an article to keep it for later.", "Πάτα το σημάδι αποθήκευσης σε ένα άρθρο για να το κρατήσεις για αργότερα."],
 
-  remove: ["Remove", "Αφαίρεση"],
-  less: ["Suggest Less", "Λιγότερα τέτοια"],
   lessDone: ["You'll see fewer stories like this.", "Θα βλέπεις λιγότερα τέτοια."],
 
   settingsTitle: ["Settings", "Ρυθμίσεις"],
@@ -112,7 +109,7 @@ let index = LANGUAGES.indexOf(current);
 
 export const language = () => current;
 export const languages = () => [...LANGUAGES];
-export const locale = () => (current === "el" ? "el-GR" : "en-GB");
+const locale = () => (current === "el" ? "el-GR" : "en-GB");
 
 const formatters = new Map();
 

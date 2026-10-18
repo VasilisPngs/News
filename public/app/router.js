@@ -25,8 +25,6 @@ export function currentRoute() {
 
 export const navigation = () => motion;
 
-export const previousPath = () => (index > 0 ? entries[index - 1] : null);
-
 const stateIndex = (state) => (state && Number.isInteger(state.index) ? state.index : 0);
 
 function remember() {

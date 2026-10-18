@@ -58,8 +58,8 @@ function articleRow(article, mode) {
     ]),
     iconButton(article.saved ? "bookmarkFilled" : "bookmark", () => act(article, article.saved ? "unsave" : "save"), { class: article.saved ? "icon-btn selected" : "icon-btn" })
   );
-  if (mode === "foryou") return swipeAction(content, t("less"), () => act(article, "less"));
-  if (mode === "saved") return swipeAction(content, t("remove"), () => act(article, "unsave"));
+  if (mode === "foryou") return swipeAction(content, "thumbDown", () => act(article, "less"));
+  if (mode === "saved") return swipeAction(content, "bookmarkRemove", () => act(article, "unsave"));
   return content;
 }
 

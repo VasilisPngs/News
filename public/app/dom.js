@@ -21,7 +21,7 @@ function append(node, children) {
   return node;
 }
 
-export function svg(tag, props = {}, children = []) {
+function svg(tag, props = {}, children = []) {
   const node = document.createElementNS("http://www.w3.org/2000/svg", tag);
   for (const [key, value] of Object.entries(props)) node.setAttribute(key, value);
   for (const child of [].concat(children)) node.append(child);
@@ -38,7 +38,9 @@ const ICONS = {
   bookmark: "m480-240-168 72q-40 17-76-6.5T200-241v-519q0-33 23.5-56.5T280-840h400q33 0 56.5 23.5T760-760v519q0 43-36 66.5t-76 6.5l-168-72Zm0-88 200 86v-518H280v518l200-86Zm0-432H280h400-200Z",
   bookmarkFilled: "m480-240-168 72q-40 17-76-6.5T200-241v-519q0-33 23.5-56.5T280-840h400q33 0 56.5 23.5T760-760v519q0 43-36 66.5t-76 6.5l-168-72Z",
   sparkles: "m706-706-70-32q-6-3-8.5-8t-2.5-10q0-5 2.5-10t8.5-8l70-32 32-70q3-6 8-9t10-3q5 0 10 3t8 9l32 70 70 32q6 3 9 8t3 10q0 5-3 10t-9 8l-70 32-32 70q-3 6-8 8.5t-10 2.5q-5 0-10-2.5t-8-8.5l-32-70ZM260-380l-160-73q-9-4-13-11.5T83-480q0-8 4-15.5t13-11.5l160-73 73-160q4-9 11.5-13t15.5-4q8 0 15.5 4t11.5 13l73 160 160 73q9 4 13 11.5t4 15.5q0 8-4 15.5T620-453l-160 73-73 160q-4 9-11.5 13t-15.5 4q-8 0-15.5-4T333-220l-73-160Zm100 26 40-86 86-40-86-40-40-86-40 86-86 40 86 40 40 86Zm350 204-70-32q-6-3-9-8t-3-10q0-5 3-10t9-8l70-32 32-70q3-6 8-9t10-3q5 0 10 3t8 9l32 70 70 32q6 3 9 8t3 10q0 5-3 10t-9 8l-70 32-32 70q-3 6-8 9t-10 3q-5 0-10-3t-8-9l-32-70ZM360-480Z",
-  news: "M160-120q-33 0-56.5-23.5T80-200v-560q0-33 23.5-56.5T160-840h640q33 0 56.5 23.5T880-760v560q0 33-23.5 56.5T800-120H160Zm0-80h640v-560H160v560Zm120-80h400q17 0 28.5-11.5T720-320q0-17-11.5-28.5T680-360H280q-17 0-28.5 11.5T240-320q0 17 11.5 28.5T280-280Zm0-160h80q17 0 28.5-11.5T400-480v-160q0-17-11.5-28.5T360-680h-80q-17 0-28.5 11.5T240-640v160q0 17 11.5 28.5T280-440Zm240 0h160q17 0 28.5-11.5T720-480q0-17-11.5-28.5T680-520H520q-17 0-28.5 11.5T480-480q0 17 11.5 28.5T520-440Zm0-160h160q17 0 28.5-11.5T720-640q0-17-11.5-28.5T680-680H520q-17 0-28.5 11.5T480-640q0 17 11.5 28.5T520-600ZM160-200v-560 560Z"
+  news: "M160-120q-33 0-56.5-23.5T80-200v-560q0-33 23.5-56.5T160-840h640q33 0 56.5 23.5T880-760v560q0 33-23.5 56.5T800-120H160Zm0-80h640v-560H160v560Zm120-80h400q17 0 28.5-11.5T720-320q0-17-11.5-28.5T680-360H280q-17 0-28.5 11.5T240-320q0 17 11.5 28.5T280-280Zm0-160h80q17 0 28.5-11.5T400-480v-160q0-17-11.5-28.5T360-680h-80q-17 0-28.5 11.5T240-640v160q0 17 11.5 28.5T280-440Zm240 0h160q17 0 28.5-11.5T720-480q0-17-11.5-28.5T680-520H520q-17 0-28.5 11.5T480-480q0 17 11.5 28.5T520-440Zm0-160h160q17 0 28.5-11.5T720-640q0-17-11.5-28.5T680-680H520q-17 0-28.5 11.5T480-640q0 17 11.5 28.5T520-600ZM160-200v-560 560Z",
+  thumbDown: "M120-320q-32 0-56-24t-24-56v-80q0-7 2-15t4-15l120-282q9-20 30-34t44-14h440v520L440-82q-15 15-35.5 17.5T365-72q-19-10-28-28t-4-37l45-183H120Zm480-34v-406H240L120-480v80h360l-54 220 174-174Zm200-486q33 0 56.5 23.5T880-760v360q0 33-23.5 56.5T800-320H680v-80h120v-360H680v-80h120Zm-200 80v406-406Z",
+  bookmarkRemove: "M640-680q-17 0-28.5-11.5T600-720q0-17 11.5-28.5T640-760h160q17 0 28.5 11.5T840-720q0 17-11.5 28.5T800-680H640ZM480-240l-168 72q-40 17-76-6.5T200-241v-519q0-33 23.5-56.5T280-840h200q17 0 28.5 11.5T520-800q0 17-11.5 28.5T480-760H280v518l200-86 200 86v-238q0-17 11.5-28.5T720-520q17 0 28.5 11.5T760-480v239q0 43-36 66.5t-76 6.5l-168-72Zm0-520H280h240-40Z"
 };
 
 export function icon(name) {
@@ -203,24 +205,16 @@ export function switchInput(checked, onChange) {
   return el("input", { type: "checkbox", class: "switch", checked, onchange: (event) => onChange(event.target.checked) });
 }
 
-const SWIPE_REVEAL = 96;
-let openSwipe = null;
+const DISMISS_DISTANCE = 56;
+const DISMISS_VELOCITY = 125;
 
-document.addEventListener(
-  "pointerdown",
-  (event) => {
-    if (openSwipe && !openSwipe.wrap.contains(event.target)) openSwipe.close();
-  },
-  true
-);
-
-export function swipeAction(content, label, onAction) {
-  const action = el("button", { class: "swipe-action", type: "button", text: label });
-  const wrap = el("div", { class: "swipe" }, [action, content]);
+export function swipeAction(content, symbol, onAction) {
+  const wrap = el("div", { class: "swipe" }, [el("div", { class: "swipe-background" }, icon(symbol)), content]);
   let offset = 0;
   let start = null;
   let dragging = false;
   let swallow = false;
+  let samples = [];
   const rest = () => {
     wrap.classList.remove("swiping");
     wrap.dispatchEvent(new Event("swipeend", { bubbles: true }));
@@ -230,20 +224,11 @@ export function swipeAction(content, label, onAction) {
     offset = x;
     content.style.transition = animate ? "" : "none";
     content.style.transform = x ? `translateX(${x}px)` : "";
+    wrap.classList.toggle("armed", x <= -DISMISS_DISTANCE);
     if (x !== 0 || !animate) wrap.classList.add("swiping");
     else if (from === 0) rest();
   };
-  const close = () => {
-    move(0, true);
-    if (openSwipe && openSwipe.wrap === wrap) openSwipe = null;
-  };
-  const reveal = () => {
-    if (openSwipe && openSwipe.wrap !== wrap) openSwipe.close();
-    move(-SWIPE_REVEAL, true);
-    openSwipe = { wrap, close };
-  };
-  const commit = async () => {
-    openSwipe = null;
+  const dismiss = async () => {
     move(-wrap.offsetWidth, true);
     const collapse = wrap.animate([{ height: `${wrap.offsetHeight}px`, opacity: 1 }, { height: "0px", opacity: 0 }], {
       duration: 300,
@@ -261,10 +246,9 @@ export function swipeAction(content, label, onAction) {
   content.addEventListener("transitionend", (event) => {
     if (event.target === content && offset === 0) rest();
   });
-  action.addEventListener("click", commit);
   wrap.addEventListener("pointerdown", (event) => {
-    if (event.pointerType === "mouse" || event.target === action) return;
-    start = { x: event.clientX, y: event.clientY, from: offset, id: event.pointerId };
+    if (event.pointerType === "mouse" || offset !== 0) return;
+    start = { x: event.clientX, y: event.clientY, id: event.pointerId };
     dragging = false;
   });
   wrap.addEventListener("pointermove", (event) => {
@@ -275,10 +259,12 @@ export function swipeAction(content, label, onAction) {
       if (Math.abs(dy) > 10 && Math.abs(dy) > Math.abs(dx)) start = null;
       if (!start || Math.abs(dx) < 10) return;
       dragging = true;
+      samples = [];
       wrap.setPointerCapture(event.pointerId);
-      if (openSwipe && openSwipe.wrap !== wrap) openSwipe.close();
     }
-    move(Math.min(0, start.from + dx), false);
+    samples.push({ x: event.clientX, t: event.timeStamp });
+    while (samples.length > 2 && event.timeStamp - samples[0].t > 100) samples.shift();
+    move(Math.min(0, dx), false);
   });
   const release = (event) => {
     if (!start || event.pointerId !== start.id) return;
@@ -289,21 +275,21 @@ export function swipeAction(content, label, onAction) {
     setTimeout(() => {
       swallow = false;
     }, 0);
-    if (offset < -Math.max(SWIPE_REVEAL * 2, wrap.offsetWidth * 0.55)) return commit();
-    if (offset < -SWIPE_REVEAL / 2) return reveal();
-    close();
+    const first = samples[0];
+    const last = samples[samples.length - 1];
+    const speed = last && last.t > first.t ? ((last.x - first.x) / (last.t - first.t)) * 1000 : 0;
+    samples = [];
+    if (event.type === "pointerup" && (speed <= -DISMISS_VELOCITY || (speed < DISMISS_VELOCITY && offset <= -DISMISS_DISTANCE))) return dismiss();
+    move(0, true);
   };
   wrap.addEventListener("pointerup", release);
   wrap.addEventListener("pointercancel", release);
   wrap.addEventListener(
     "click",
     (event) => {
-      if (event.target === action) return;
-      if (swallow || offset !== 0) {
-        event.preventDefault();
-        event.stopPropagation();
-        if (!swallow) close();
-      }
+      if (!swallow && offset === 0) return;
+      event.preventDefault();
+      event.stopPropagation();
     },
     true
   );
@@ -373,7 +359,7 @@ function unlockPage(app) {
 
 const rootLength = (name) => parseFloat(getComputedStyle(document.documentElement).getPropertyValue(name)) || 0;
 
-export function openDialog(build, onClose) {
+function openDialog(build, onClose) {
   const host = document.getElementById("dialog-host");
   const app = document.getElementById("app");
   const dialog = el("dialog", { class: "dialog", tabIndex: -1 });
