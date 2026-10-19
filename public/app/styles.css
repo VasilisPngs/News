@@ -445,6 +445,12 @@ input:focus-visible {
   color: var(--md-on-surface-variant);
 }
 
+.list-item > .icon,
+.drag-handle .icon {
+  width: 20px;
+  height: 20px;
+}
+
 .list-item:has(> .switch) {
   padding-block: 12px;
 }
