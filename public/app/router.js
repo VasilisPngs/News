@@ -7,12 +7,9 @@ const ROUTES = [
   { pattern: /^\/settings\/following$/, name: "sourceList", tab: "/settings", params: () => ({}) }
 ];
 
-const entries = [];
 const lastPaths = new Map();
-let index = 0;
 let renderer = null;
 let motion = { restore: false, animate: true };
-let ownBack = false;
 
 export function currentRoute() {
   const path = location.pathname;
@@ -25,63 +22,60 @@ export function currentRoute() {
 
 export const navigation = () => motion;
 
-const stateIndex = (state) => (state && Number.isInteger(state.index) ? state.index : 0);
+const known = (path) => ROUTES.some((route) => route.pattern.test(path));
 
-function remember() {
-  entries[index] = location.pathname;
-  lastPaths.set(currentRoute().tab, location.pathname);
+function previousEntry() {
+  const index = window.navigation.currentEntry.index;
+  const entry = index > 0 ? window.navigation.entries()[index - 1] : null;
+  return entry && entry.sameDocument ? new URL(entry.url).pathname : null;
 }
 
-function go(restore, animate = true) {
+function settle(result) {
+  result.committed.catch(() => {});
+  result.finished.catch(() => {});
+}
+
+function go(restore, animate) {
   motion = { restore, animate };
   if (renderer) renderer();
 }
 
-function record(path, push) {
-  if (push) {
-    index += 1;
-    entries.length = index;
-  }
-  history[push ? "pushState" : "replaceState"]({ index }, "", path);
-  remember();
+function move(path, mode, restore) {
+  settle(window.navigation.navigate(path, { history: mode, info: { restore, animate: true } }));
 }
 
 export function navigate(path) {
-  if (path !== location.pathname) record(path, true);
-  go(false);
+  if (path !== location.pathname) move(path, "push", false);
+  else go(false, true);
 }
 
 export function goBack(parent) {
-  if (index > 0 && entries[index - 1] === parent) {
-    ownBack = true;
-    return history.back();
-  }
-  record(parent, false);
-  go(true);
+  if (previousEntry() === parent) settle(window.navigation.back({ info: { restore: true, animate: true } }));
+  else move(parent, "replace", true);
 }
 
 function openTab(root) {
-  if (currentRoute().tab !== root) {
-    record(lastPaths.get(root) || root, false);
-    go(true);
-  } else if (location.pathname !== root) {
-    goBack(root);
-  } else {
-    scrollTo({ top: 0, behavior: "smooth" });
-  }
+  if (currentRoute().tab !== root) move(lastPaths.get(root) || root, "replace", true);
+  else if (location.pathname !== root) goBack(root);
+  else scrollTo({ top: 0, behavior: "smooth" });
 }
 
 export function startRouter(fn) {
   renderer = fn;
-  index = stateIndex(history.state);
-  history.replaceState({ index }, "", ROUTES.some((route) => route.pattern.test(location.pathname)) ? location.href : "/");
-  remember();
-  addEventListener("popstate", (event) => {
-    index = stateIndex(event.state);
-    remember();
-    const animate = ownBack;
-    ownBack = false;
-    go(true, animate);
+  window.navigation.addEventListener("navigate", (event) => {
+    if (!event.canIntercept || event.hashChange || event.downloadRequest !== null || event.formData) return;
+    const info = event.info;
+    if (!info && event.navigationType !== "traverse") return;
+    if (!known(new URL(event.destination.url).pathname)) return;
+    event.intercept({
+      scroll: "manual",
+      focusReset: "manual",
+      handler: () => {
+        lastPaths.set(currentRoute().tab, location.pathname);
+        if (info) go(info.restore, info.animate);
+        else go(true, false);
+      }
+    });
   });
   document.addEventListener("click", (event) => {
     const link = event.target.closest("a[data-link]");
@@ -94,5 +88,8 @@ export function startRouter(fn) {
     else if (href === location.pathname) scrollTo({ top: 0, behavior: "smooth" });
     else navigate(href);
   });
-  go(false);
+  const path = known(location.pathname) ? location.pathname : "/";
+  if (location.pathname + location.search !== path) return move(path, "replace", false);
+  lastPaths.set(currentRoute().tab, path);
+  go(false, true);
 }

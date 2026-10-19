@@ -169,7 +169,6 @@ view.addEventListener("swipeend", renderDeferred);
 
 function boot() {
   startShell();
-  if (new URL(location.href).searchParams.has("signin")) history.replaceState({}, "", location.pathname);
   applyLanguage();
   applyTheme();
   storeEvents.addEventListener("changed", () => {
