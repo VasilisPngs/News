@@ -94,10 +94,11 @@ export function loadFeed(tab, source = null, force = false) {
   const request = post("/api/feed", { tab, source })
     .then(({ items }) => {
       const next = { items: items || [], at: Date.now(), fresh: true };
-      failed.delete(key);
+      const previous = feeds.get(key);
+      const recovered = failed.delete(key);
       feeds.set(key, next);
       writeJson(`news.feed.${key}`, { items: next.items, at: next.at });
-      changed();
+      if (recovered || !previous || JSON.stringify(previous.items) !== JSON.stringify(next.items)) changed();
       return next;
     })
     .catch((error) => {

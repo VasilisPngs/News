@@ -2,16 +2,40 @@ import { el, iconButton, swipeAction, snackbar } from "../dom.js";
 import { t, tn, ago } from "../i18n.js";
 import { markOpened, articleAction } from "../store.js";
 
-function sourceIcon(article) {
-  if (!article.icon) return null;
-  return el("img", {
-    class: "source-icon",
-    src: article.icon,
+const PICTURE_LIMIT = 300;
+const pictures = new Map();
+
+function keep(key, node) {
+  pictures.delete(key);
+  pictures.set(key, node);
+  if (pictures.size > PICTURE_LIMIT) pictures.delete(pictures.keys().next().value);
+}
+
+function picture(key, src, props, onFail) {
+  const kept = pictures.get(key);
+  if (kept && kept.getAttribute("src") === src) {
+    keep(key, kept);
+    return kept;
+  }
+  const node = el("img", {
+    src,
     alt: "",
     decoding: "async",
     referrerPolicy: "no-referrer",
-    onerror: (event) => event.currentTarget.remove()
+    ...props,
+    onload: () => keep(key, node),
+    onerror: () => {
+      pictures.delete(key);
+      node.remove();
+      if (onFail) onFail();
+    }
   });
+  return node;
+}
+
+function sourceIcon(article) {
+  if (!article.icon) return null;
+  return picture(`icon:${article.id}`, article.icon, { class: "source-icon" });
 }
 
 function meta(article) {
@@ -34,18 +58,7 @@ async function act(article, action) {
 function thumbnail(article, row) {
   if (!article.image) return null;
   row.classList.add("with-image");
-  return el("img", {
-    class: "article-image",
-    src: article.image,
-    alt: "",
-    loading: "lazy",
-    decoding: "async",
-    referrerPolicy: "no-referrer",
-    onerror: (event) => {
-      event.currentTarget.remove();
-      row.classList.remove("with-image");
-    }
-  });
+  return picture(`image:${article.id}`, article.image, { class: "article-image", loading: "lazy" }, () => row.classList.remove("with-image"));
 }
 
 function articleRow(article, mode) {
