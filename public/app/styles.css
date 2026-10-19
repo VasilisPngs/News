@@ -413,7 +413,7 @@ input:focus-visible {
 .list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 2px;
 }
 
 .list-item {
@@ -449,6 +449,40 @@ input:focus-visible {
 .drag-handle .icon {
   width: 20px;
   height: 20px;
+}
+
+.list > :where(.list-item, .swipe) {
+  border-radius: 4px;
+  transition: border-radius var(--md-fast-spatial);
+}
+
+.list > :where(.list-item, .swipe):where(:nth-child(1 of .list-item, .swipe)) {
+  border-top-left-radius: 16px;
+  border-top-right-radius: 16px;
+}
+
+.list > :where(.list-item, .swipe):where(:nth-last-child(1 of .list-item, .swipe)) {
+  border-bottom-left-radius: 16px;
+  border-bottom-right-radius: 16px;
+}
+
+@media (hover: hover) {
+  .list > .list-item.action:not(:disabled):hover,
+  .list > .manage:has(> .grow:hover),
+  .list > :is(.article, .swipe):has(.article-link:hover) {
+    border-radius: 12px;
+  }
+}
+
+.list > .list-item.action:not(:disabled):active,
+.list > .manage:has(> .grow:active),
+.list > :is(.article, .swipe):has(.article-link:active),
+.list > .dragging {
+  border-radius: 16px;
+}
+
+.swipe > .list-item {
+  border-radius: inherit;
 }
 
 .list-item:has(> .switch) {
@@ -597,7 +631,6 @@ input:focus-visible {
 
 .swipe {
   position: relative;
-  border-radius: 16px;
   overflow: hidden;
   touch-action: pan-y;
 }
