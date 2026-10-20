@@ -549,7 +549,7 @@ export async function icons(env, limit = 2) {
   return rows.length;
 }
 
-export async function rescore(env, now, limit = RESCORE_LIMIT) {
+async function rescore(env, now, limit = RESCORE_LIMIT) {
   const [taste, rows] = await Promise.all([
     interests(env),
     env.DB.prepare("SELECT id, vector, affinity FROM articles WHERE vector IS NOT NULL AND published_at > ?1 ORDER BY published_at DESC LIMIT ?2").bind(now - WINDOW_MS, limit).all()

@@ -20,7 +20,7 @@ function entities(value) {
   });
 }
 
-export function clean(value) {
+function clean(value) {
   if (!value) return "";
   const raw = value.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1");
   return entities(entities(raw).replace(/<[^>]*>/g, " ")).replace(/\s+/g, " ").trim();
