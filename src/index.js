@@ -608,14 +608,14 @@ export async function refresh(env, now, { owner = null, limit = FEEDS_PER_RUN, h
       if (!found.has(id)) found.set(id, { id, feed, item: entry });
     }
   }
-  const known = new Set();
+  const known = new Map();
   for (const ids of chunks([...found.keys()], MAX_PARAMS)) {
-    const rows = await env.DB.prepare(`SELECT id FROM articles WHERE id IN (${slots(ids.length)})`).bind(...ids).all();
-    for (const row of rows.results) known.add(row.id);
+    const rows = await env.DB.prepare(`SELECT id, image FROM articles WHERE id IN (${slots(ids.length)})`).bind(...ids).all();
+    for (const row of rows.results) known.set(row.id, row.image);
   }
   const additions = [...found.values()].filter((entry) => !known.has(entry.id));
   for (const entry of found.values()) {
-    if (known.has(entry.id) && entry.item.image) updates.push(env.DB.prepare("UPDATE articles SET image = ?2 WHERE id = ?1 AND (image IS NULL OR image = '')").bind(entry.id, entry.item.image));
+    if (known.has(entry.id) && !known.get(entry.id) && entry.item.image) updates.push(env.DB.prepare("UPDATE articles SET image = ?2 WHERE id = ?1 AND (image IS NULL OR image = '')").bind(entry.id, entry.item.image));
   }
   const touched = additions.length ? await ingest(env, now, additions) : new Set();
   await env.DB.batch(updates);
