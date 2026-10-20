@@ -101,7 +101,7 @@ async function state(env) {
   return { topics: topics.results, sources: sources.results, pushKey: publicKey(key) };
 }
 
-const addFeed = (env, url, owner) => env.DB.prepare("INSERT OR IGNORE INTO feeds (url, owner, kind, fetched_at) VALUES (?1, ?2, 'source', 0)").bind(url, owner);
+const addFeed = (env, url, owner) => env.DB.prepare("INSERT OR IGNORE INTO feeds (url, owner, fetched_at) VALUES (?1, ?2, 0)").bind(url, owner);
 
 function background(env, ctx, work, route) {
   ctx.waitUntil(work.catch((error) => recordError(env, { kind: "background", message: String(error && error.message), route })));
@@ -182,7 +182,7 @@ export async function tryCandidates(env, limit = POOL_PER_RUN) {
         env.DB.prepare(
           "INSERT INTO sources (id, title, site, feed, position, created_at, icon, hidden, topic) SELECT ?1, ?2, ?3, ?4, 0, ?5, ?6, 1, ?7 WHERE EXISTS (SELECT 1 FROM topics WHERE id = ?7)"
         ).bind(id, cleanName(found.title) || new URL(site).hostname.replace(/^www\./, ""), site, found.feed, Date.now(), found.icon || null, row.topic),
-        env.DB.prepare("INSERT OR IGNORE INTO feeds (url, owner, kind, fetched_at) SELECT ?1, ?2, 'source', 0 WHERE EXISTS (SELECT 1 FROM sources WHERE id = ?2)").bind(found.feed, id)
+        env.DB.prepare("INSERT OR IGNORE INTO feeds (url, owner, fetched_at) SELECT ?1, ?2, 0 WHERE EXISTS (SELECT 1 FROM sources WHERE id = ?2)").bind(found.feed, id)
       );
       added.push(id);
     }
@@ -503,7 +503,7 @@ async function ingest(env, now, additions) {
     const extra = scored ? scored[index] : { story: entry.id, words: "", vector: null, affinity: 0 };
     if (scored) touched.add(extra.story);
     return env.DB.prepare(
-      "INSERT OR IGNORE INTO articles (id, kind, owner, story, title, url, source, lang, published_at, seen_at, tokens, vector, affinity, image) VALUES (?1, 'source', ?2, ?3, ?4, ?5, ?6, NULL, ?7, ?8, ?9, ?10, ?11, ?12)"
+      "INSERT OR IGNORE INTO articles (id, owner, story, title, url, source, published_at, seen_at, tokens, vector, affinity, image) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)"
     ).bind(
       entry.id,
       entry.feed.owner,

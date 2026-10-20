@@ -67,7 +67,7 @@ test("For You picks from the sites the AI found for your topics, grouped by stor
   assert.deepEqual(rows(env, "SELECT title, hidden FROM sources ORDER BY title"), [{ title: "Gazzetta", hidden: 1 }, { title: "Sport24", hidden: 1 }]);
   assert.deepEqual(rows(env, "SELECT domain, tried FROM candidates ORDER BY domain"), [{ domain: "gazzetta.example", tried: 1 }, { domain: "sport.example", tried: 1 }]);
   assert.deepEqual((await api(worker, env, "/api/state", {})).json.sources, []);
-  assert.equal(rows(env, "SELECT COUNT(*) AS n FROM articles WHERE vector IS NOT NULL AND kind = 'source'")[0].n, 6);
+  assert.equal(rows(env, "SELECT COUNT(*) AS n FROM articles WHERE vector IS NOT NULL")[0].n, 6);
   const items = await forYou(env);
   assert.equal(items.length, 4);
   assert.ok(!items.some((item) => item.title.startsWith("Καιρός")));

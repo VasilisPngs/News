@@ -1,0 +1,4 @@
+ALTER TABLE articles DROP COLUMN kind;
+ALTER TABLE articles DROP COLUMN lang;
+ALTER TABLE feeds DROP COLUMN kind;
+ALTER TABLE feeds DROP COLUMN lang;
