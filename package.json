@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "deploy": "npm test && npx wrangler d1 migrations apply DB --remote && npx wrangler deploy",
     "test": "node --disable-warning=ExperimentalWarning --test test/*.test.mjs"
   },
   "devDependencies": {

@@ -41,32 +41,6 @@ const WEIGHTS = { open: 0.5, read: 1.5, bounce: -1, save: 1, less: -1.5 };
 const BOUNCE_SECONDS = 10;
 const READ_SECONDS = 60;
 
-const SCHEMA = [
-  "CREATE TABLE IF NOT EXISTS topics (id TEXT PRIMARY KEY, name TEXT NOT NULL, vector TEXT, position INTEGER NOT NULL, created_at INTEGER NOT NULL, pooled_at INTEGER)",
-  "CREATE TABLE IF NOT EXISTS candidates (topic TEXT NOT NULL, domain TEXT NOT NULL, tried INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (topic, domain))",
-  "CREATE TABLE IF NOT EXISTS sources (id TEXT PRIMARY KEY, title TEXT NOT NULL, site TEXT NOT NULL, feed TEXT NOT NULL UNIQUE, position INTEGER NOT NULL, created_at INTEGER NOT NULL, icon TEXT, hidden INTEGER NOT NULL DEFAULT 0, topic TEXT)",
-  "CREATE TABLE IF NOT EXISTS feeds (url TEXT PRIMARY KEY, owner TEXT NOT NULL, kind TEXT NOT NULL, lang TEXT, fetched_at INTEGER NOT NULL DEFAULT 0, etag TEXT, modified TEXT, failures INTEGER NOT NULL DEFAULT 0)",
-  "CREATE INDEX IF NOT EXISTS feeds_owner ON feeds (owner)",
-  "CREATE TABLE IF NOT EXISTS articles (id TEXT PRIMARY KEY, kind TEXT NOT NULL, owner TEXT NOT NULL, story TEXT NOT NULL, title TEXT NOT NULL, url TEXT NOT NULL, source TEXT NOT NULL, lang TEXT, published_at INTEGER NOT NULL, seen_at INTEGER NOT NULL, tokens TEXT NOT NULL, vector TEXT, affinity REAL NOT NULL DEFAULT 0, opened_at INTEGER, hidden_at INTEGER, saved_at INTEGER, notified_at INTEGER, image TEXT, dwell INTEGER, views INTEGER NOT NULL DEFAULT 0, viewed_at INTEGER)",
-  "CREATE INDEX IF NOT EXISTS articles_time ON articles (published_at)",
-  "CREATE INDEX IF NOT EXISTS articles_story ON articles (story)",
-  "CREATE INDEX IF NOT EXISTS articles_owner ON articles (owner)",
-  "CREATE INDEX IF NOT EXISTS articles_kept ON articles (saved_at, seen_at)",
-  "CREATE TABLE IF NOT EXISTS subscriptions (endpoint TEXT PRIMARY KEY, p256dh TEXT NOT NULL, auth TEXT NOT NULL, created_at INTEGER NOT NULL)",
-  "CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)",
-  "CREATE TABLE IF NOT EXISTS errors (at INTEGER NOT NULL, kind TEXT NOT NULL, message TEXT NOT NULL, stack TEXT, route TEXT, agent TEXT)"
-];
-
-const INDEXES = [
-  "DROP INDEX IF EXISTS articles_kind_time",
-  "DROP INDEX IF EXISTS articles_saved",
-  "CREATE INDEX IF NOT EXISTS articles_unembedded ON articles (published_at) WHERE vector IS NULL",
-  "CREATE INDEX IF NOT EXISTS articles_imageless ON articles (published_at) WHERE image IS NULL",
-  "CREATE INDEX IF NOT EXISTS articles_hidden ON articles (story) WHERE hidden_at IS NOT NULL",
-  "CREATE INDEX IF NOT EXISTS articles_notified ON articles (story) WHERE notified_at IS NOT NULL",
-  "CREATE INDEX IF NOT EXISTS candidates_open ON candidates (tried)"
-];
-
 const json = (body, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" } });
 
@@ -84,45 +58,6 @@ function chunks(list, size) {
   const out = [];
   for (let start = 0; start < list.length; start += size) out.push(list.slice(start, start + size));
   return out;
-}
-
-const ready = new WeakMap();
-
-function prepare(env) {
-  if (!ready.has(env.DB)) {
-    ready.set(
-      env.DB,
-      env.DB.batch(SCHEMA.map((sql) => env.DB.prepare(sql)))
-        .then(() => upgrade(env))
-        .catch((error) => {
-          ready.delete(env.DB);
-          throw error;
-        })
-    );
-  }
-  return ready.get(env.DB);
-}
-
-async function upgrade(env) {
-  const [articles, topics, sources] = await Promise.all(["articles", "topics", "sources"].map((table) => env.DB.prepare(`PRAGMA table_info(${table})`).all()));
-  const steps = [];
-  if (!articles.results.some((column) => column.name === "image")) steps.push("ALTER TABLE articles ADD COLUMN image TEXT");
-  if (!articles.results.some((column) => column.name === "dwell")) steps.push("ALTER TABLE articles ADD COLUMN dwell INTEGER");
-  if (!articles.results.some((column) => column.name === "views")) steps.push("ALTER TABLE articles ADD COLUMN views INTEGER NOT NULL DEFAULT 0", "ALTER TABLE articles ADD COLUMN viewed_at INTEGER");
-  if (!sources.results.some((column) => column.name === "icon")) steps.push("ALTER TABLE sources ADD COLUMN icon TEXT");
-  if (!sources.results.some((column) => column.name === "hidden")) steps.push("ALTER TABLE sources ADD COLUMN hidden INTEGER NOT NULL DEFAULT 0", "ALTER TABLE sources ADD COLUMN topic TEXT");
-  if (!topics.results.some((column) => column.name === "pooled_at")) steps.push("ALTER TABLE topics ADD COLUMN pooled_at INTEGER");
-  if (topics.results.some((column) => column.name === "query_en")) {
-    steps.push("ALTER TABLE topics DROP COLUMN query_en", "DELETE FROM feeds WHERE kind = 'topic'", "DELETE FROM articles WHERE kind = 'topic' AND saved_at IS NULL");
-  }
-  for (const sql of steps) {
-    await env.DB.prepare(sql)
-      .run()
-      .catch((error) => {
-        if (!/duplicate column|no such column/i.test(String(error && error.message))) throw error;
-      });
-  }
-  await env.DB.batch(INDEXES.map((sql) => env.DB.prepare(sql)));
 }
 
 async function hashId(text) {
@@ -614,7 +549,6 @@ export async function icons(env, limit = 2) {
 }
 
 export async function rescore(env, now, limit = RESCORE_LIMIT) {
-  await prepare(env);
   const [taste, rows] = await Promise.all([
     interests(env),
     env.DB.prepare("SELECT id, vector, affinity FROM articles WHERE vector IS NOT NULL AND published_at > ?1 ORDER BY published_at DESC LIMIT ?2").bind(now - WINDOW_MS, limit).all()
@@ -645,7 +579,6 @@ function conditional(feed) {
 }
 
 export async function refresh(env, now, { owner = null, limit = FEEDS_PER_RUN, hidden = null } = {}) {
-  await prepare(env);
   const due = owner
     ? await env.DB.prepare("SELECT * FROM feeds WHERE owner = ?1").bind(owner).all()
     : hidden !== null
@@ -798,7 +731,6 @@ export default {
     if (access === "unavailable") return json({ error: "access_unavailable" }, 503);
     if (access !== "ok") return json({ error: "forbidden" }, 403);
     try {
-      await prepare(env);
       return await route(request, env, ctx);
     } catch (error) {
       console.error(JSON.stringify({ api_failed: url.pathname, error: String(error && error.message).slice(0, 200) }));

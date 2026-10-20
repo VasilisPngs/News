@@ -372,47 +372,6 @@ test("articles stored without a vector get one later and are grouped by story", 
   assert.equal(rows(env, "SELECT COUNT(*) AS n FROM articles WHERE story = ?", storyOf(env, "Λεβαντόφσκι"))[0].n, 2);
 });
 
-test("an older database gains the picture column on first use", async () => {
-  const env = environment();
-  env.DB.sqlite.exec("CREATE TABLE articles (id TEXT PRIMARY KEY, kind TEXT NOT NULL, owner TEXT NOT NULL, story TEXT NOT NULL, title TEXT NOT NULL, url TEXT NOT NULL, source TEXT NOT NULL, lang TEXT, published_at INTEGER NOT NULL, seen_at INTEGER NOT NULL, tokens TEXT NOT NULL, vector TEXT, affinity REAL NOT NULL DEFAULT 0, opened_at INTEGER, hidden_at INTEGER, saved_at INTEGER, notified_at INTEGER)");
-  assert.equal((await api(worker, env, "/api/state", {})).status, 200);
-  assert.ok(rows(env, "PRAGMA table_info(articles)").some((column) => column.name === "image"));
-  assert.ok(rows(env, "PRAGMA table_info(articles)").some((column) => column.name === "dwell"));
-  assert.ok(rows(env, "PRAGMA table_info(articles)").some((column) => column.name === "views"));
-});
-
-test("topic feeds of the previous version and their unsaved articles go, saved ones stay", async () => {
-  const env = environment();
-  const now = Date.now();
-  env.DB.sqlite.exec(`
-    CREATE TABLE topics (id TEXT PRIMARY KEY, name TEXT NOT NULL, query_en TEXT, vector TEXT, position INTEGER NOT NULL, created_at INTEGER NOT NULL);
-    INSERT INTO topics VALUES ('t1', 'Apple', 'Apple', NULL, 0, 1);
-    CREATE TABLE feeds (url TEXT PRIMARY KEY, owner TEXT NOT NULL, kind TEXT NOT NULL, lang TEXT, fetched_at INTEGER NOT NULL DEFAULT 0, etag TEXT, modified TEXT, failures INTEGER NOT NULL DEFAULT 0);
-    INSERT INTO feeds (url, owner, kind, lang) VALUES ('https://news.google.com/rss/search?q=Apple', 't1', 'topic', 'en'), ('https://site.example/feed', 's1', 'source', NULL);
-    CREATE TABLE sources (id TEXT PRIMARY KEY, title TEXT NOT NULL, site TEXT NOT NULL, feed TEXT NOT NULL UNIQUE, position INTEGER NOT NULL, created_at INTEGER NOT NULL);
-    INSERT INTO sources VALUES ('s1', 'Site', 'https://site.example/', 'https://site.example/feed', 0, 1);
-    CREATE TABLE articles (id TEXT PRIMARY KEY, kind TEXT NOT NULL, owner TEXT NOT NULL, story TEXT NOT NULL, title TEXT NOT NULL, url TEXT NOT NULL, source TEXT NOT NULL, lang TEXT, published_at INTEGER NOT NULL, seen_at INTEGER NOT NULL, tokens TEXT NOT NULL, vector TEXT, affinity REAL NOT NULL DEFAULT 0, opened_at INTEGER, hidden_at INTEGER, saved_at INTEGER, notified_at INTEGER, image TEXT);
-    CREATE INDEX articles_kind_time ON articles (kind, published_at);
-    CREATE INDEX articles_saved ON articles (saved_at);
-  `);
-  const insert = env.DB.sqlite.prepare("INSERT INTO articles (id, kind, owner, story, title, url, source, published_at, seen_at, tokens, saved_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, '', ?)");
-  insert.run("x", "source", "s1", "x", "Kept", "https://site.example/x", "Site", now, now, null);
-  insert.run("g1", "topic", "t1", "g1", "Gone", "https://news.google.com/a", "Verge", now, now, null);
-  insert.run("g2", "topic", "t1", "g2", "Saved", "https://news.google.com/b", "Verge", now, now, now);
-  const state = await api(worker, env, "/api/state", {});
-  assert.deepEqual(state.json.topics, [{ id: "t1", name: "Apple" }]);
-  assert.ok(!rows(env, "PRAGMA table_info(topics)").some((column) => column.name === "query_en"));
-  assert.deepEqual(rows(env, "SELECT kind FROM feeds"), [{ kind: "source" }]);
-  assert.ok(rows(env, "PRAGMA table_info(sources)").some((column) => column.name === "icon"));
-  assert.deepEqual(
-    rows(env, "SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name IN ('articles', 'candidates') AND sql IS NOT NULL ORDER BY name").map((row) => row.name),
-    ["articles_hidden", "articles_imageless", "articles_kept", "articles_notified", "articles_owner", "articles_story", "articles_time", "articles_unembedded", "candidates_open"]
-  );
-  assert.deepEqual(rows(env, "SELECT id FROM articles ORDER BY id").map((row) => row.id), ["g2", "x"]);
-  const saved = (await api(worker, env, "/api/feed", { tab: "saved" })).json.items;
-  assert.deepEqual(saved.map((item) => [item.title, item.source]), [["Saved", "Verge"]]);
-});
-
 test("pulling to refresh fetches the stale feeds of that tab only, and not again within two minutes", async () => {
   const env = pooled();
   const now = Date.now();

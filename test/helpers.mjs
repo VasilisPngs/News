@@ -1,9 +1,12 @@
 import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
+import { readdirSync, readFileSync } from "node:fs";
 import { base64UrlDecode, base64UrlEncode } from "../src/push.js";
 
 export function database() {
   const db = new DatabaseSync(":memory:");
+  const dir = new URL("../migrations/", import.meta.url);
+  for (const file of readdirSync(dir).sort()) db.exec(readFileSync(new URL(file, dir), "utf8"));
   const statement = (sql, params = []) => ({
     bind: (...values) => statement(sql, values),
     first: async (column) => {
