@@ -349,13 +349,14 @@ async function feedRoute(request, env) {
     return json({ items: rows.results.map(item) });
   }
   const rows = await env.DB.prepare(
-    `SELECT id, title, url, source, icon, published_at, opened AS opened_at, saved AS saved_at, (SELECT COUNT(DISTINCT b.owner) FROM articles b WHERE b.story = lead.story) AS coverage, image, affinity, tokens, views FROM (
-      SELECT a.id, a.title, a.url, a.story, s.title AS source, s.icon, s.hidden, a.published_at, a.affinity, a.image, a.tokens,
-        MAX(a.opened_at) OVER same AS opened, MAX(a.saved_at) OVER same AS saved, MAX(a.views) OVER same AS views, ROW_NUMBER() OVER same AS place
-      FROM articles a JOIN sources s ON s.id = a.owner
-      WHERE a.vector IS NOT NULL AND a.published_at > ?1 AND a.story NOT IN (SELECT story FROM articles WHERE hidden_at IS NOT NULL)
-      WINDOW same AS (PARTITION BY a.story ORDER BY s.hidden DESC, a.affinity DESC, a.published_at DESC ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING)
-    ) lead WHERE place = 1 AND hidden = 1 AND opened IS NULL ORDER BY published_at DESC LIMIT ?2`
+    `SELECT a.id, a.title, a.url, s.title AS source, s.icon, a.published_at, NULL AS opened_at, lead.saved AS saved_at, (SELECT COUNT(DISTINCT b.owner) FROM articles b WHERE b.story = a.story) AS coverage, a.image, a.affinity, a.tokens, lead.views FROM (
+      SELECT MAX(CASE WHEN owner IN (SELECT id FROM sources WHERE hidden = 1) THEN printf('%.17f|%d|%s', affinity + 1, published_at, id) END) AS pick, MAX(saved_at) AS saved, MAX(views) AS views
+      FROM articles INDEXED BY articles_time
+      WHERE vector IS NOT NULL AND published_at > ?1 AND owner IN (SELECT id FROM sources)
+      GROUP BY story
+      HAVING pick IS NOT NULL AND MAX(opened_at) IS NULL AND story NOT IN (SELECT story FROM articles WHERE hidden_at IS NOT NULL)
+      ORDER BY substr(pick, 21, 13) DESC LIMIT ?2
+    ) lead JOIN articles a ON a.id = substr(lead.pick, 35) JOIN sources s ON s.id = a.owner ORDER BY a.published_at DESC`
   )
     .bind(now - WINDOW_MS, RESCORE_LIMIT)
     .all();
