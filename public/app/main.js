@@ -63,7 +63,8 @@ function render() {
   const changed = key !== lastRouteKey;
   const from = DEPTH[lastRouteKey] || 0;
   const to = DEPTH[route.name] || 0;
-  const direction = animate && changed && route.tab === lastTab && from !== to ? (to > from ? "push" : "pop") : null;
+  const lateral = from !== to ? (to > from ? "push" : "pop") : null;
+  const direction = animate && changed && lastTab ? (route.tab === lastTab ? lateral : "tab") : null;
   if (changed) positions.set(lastRouteKey, scrollY);
   const update = () => {
     view.replaceChildren();

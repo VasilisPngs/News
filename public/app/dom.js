@@ -325,7 +325,7 @@ export function snackbar(message) {
   const host = document.getElementById("snackbar-host");
   const node = el("div", { class: "snackbar", text: message });
   if (host.matches(":popover-open")) host.hidePopover();
-  host.append(node);
+  host.replaceChildren(node);
   host.showPopover();
   const drop = () => {
     node.remove();
@@ -386,7 +386,9 @@ function openDialog(build, onClose) {
   });
   dialog.addEventListener("close", close);
   dialog.addEventListener("click", (event) => {
-    if (event.target === dialog) close();
+    if (event.target !== dialog) return;
+    const box = dialog.getBoundingClientRect();
+    if (event.clientX < box.left || event.clientX > box.right || event.clientY < box.top || event.clientY > box.bottom) close();
   });
   append(dialog, build(close));
   host.append(dialog);

@@ -4,7 +4,7 @@ const STORAGE_KEY = "news.lang";
 const LANGUAGES = ["en", "el"];
 
 const STRINGS = {
-  tabForYou: ["For You", "Για εσάς"],
+  tabForYou: ["For you", "Για εσάς"],
   tabSources: ["Following", "Ακολουθείτε"],
   tabSaved: ["Saved", "Αποθηκευμένα"],
   tabSettings: ["Settings", "Ρυθμίσεις"],
@@ -21,7 +21,7 @@ const STRINGS = {
   namePlaceholder: ["Name", "Όνομα"],
   all: ["All", "Όλες"],
 
-  forYouTitle: ["For You", "Για εσάς"],
+  forYouTitle: ["For you", "Για εσάς"],
   newTopic: ["New topic", "Νέο θέμα"],
   topicLabel: ["Topic", "Θέμα"],
   topicPlaceholder: ["Barcelona, AI, iPhone", "Μπαρτσελόνα, AI, iPhone"],
@@ -57,7 +57,7 @@ const STRINGS = {
   deleteTopic: ["Delete topic", "Διαγραφή θέματος"],
   deleteTopicBody: ["The sites the AI found for it go too. Saved articles stay.", "Φεύγουν και τα sites που βρήκε το AI γι' αυτό. Τα αποθηκευμένα μένουν."],
   deleteSource: ["Delete source", "Διαγραφή πηγής"],
-  deleteSourceBody: ["Its articles leave Following and For You. Saved ones stay.", "Τα άρθρα της φεύγουν από το «Ακολουθείτε» και το «Για εσάς». Τα αποθηκευμένα μένουν."],
+  deleteSourceBody: ["Its articles leave Following and For you. Saved ones stay.", "Τα άρθρα της φεύγουν από το «Ακολουθείτε» και το «Για εσάς». Τα αποθηκευμένα μένουν."],
   notifications: ["Notifications", "Ειδοποιήσεις"],
   importantNews: ["Important news", "Σημαντικές ειδήσεις"],
   importantNewsNote: ["Up to 3 a day, only when many of your sources cover something in your topics.", "Έως 3 την ημέρα, μόνο όταν πολλές από τις πηγές σου γράφουν για κάτι στα θέματά σου."],

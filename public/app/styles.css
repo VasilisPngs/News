@@ -34,6 +34,8 @@
   --md-secondary: light-dark(#575f72, #bfc6dc);
   --md-secondary-container: light-dark(#dbe2f9, #343b4d);
   --md-on-secondary-container: light-dark(#4a5264, #b7bfd5);
+  --md-tertiary-container: light-dark(#e4ceff, #e4ceff);
+  --md-on-tertiary-container: light-dark(#54436b, #54436b);
   --md-error-container: light-dark(#fa746f, #871f21);
   --md-on-error-container: light-dark(#6e0a12, #ff9993);
   --md-surface: light-dark(#faf9fe, #0d0e12);
@@ -159,7 +161,7 @@ a {
   fill: currentColor;
 }
 
-:where(.icon-btn, .btn, .chip, .nav-indicator, .list-item.action, .article, .manage)::after {
+:where(.icon-btn, .btn, .chip, .nav-indicator, .list-item.action, label.list-item, .article, .manage)::after {
   content: "";
   position: absolute;
   inset: 0;
@@ -171,7 +173,7 @@ a {
 }
 
 @media (hover: hover) {
-  :is(.icon-btn, .btn, .chip, .list-item.action):not(:disabled):hover::after,
+  :is(.icon-btn, .btn, .chip, .list-item.action, label.list-item):not(:disabled):hover::after,
   .nav-item:hover .nav-indicator::after,
   .article:has(.article-link:hover)::after,
   .manage:has(> .grow:hover)::after {
@@ -179,7 +181,7 @@ a {
   }
 }
 
-:is(.icon-btn, .btn, .chip, .list-item.action):not(:disabled):active::after,
+:is(.icon-btn, .btn, .chip, .list-item.action, label.list-item):not(:disabled):active::after,
 .nav-item:active .nav-indicator::after,
 .article:has(.article-link:active)::after,
 .manage:has(> .grow:active)::after {
@@ -433,11 +435,12 @@ input:focus-visible {
   width: 100%;
 }
 
-.list-item.action {
+.list-item.action,
+label.list-item {
   cursor: pointer;
 }
 
-:is(.list-item.action, .article, .manage)::after {
+:is(.list-item.action, label.list-item, .article, .manage)::after {
   background: var(--md-on-surface);
 }
 
@@ -468,6 +471,7 @@ input:focus-visible {
 
 @media (hover: hover) {
   .list > .list-item.action:not(:disabled):hover,
+  .list > label.list-item:hover,
   .list > .manage:has(> .grow:hover),
   .list > :is(.article, .swipe):has(.article-link:hover) {
     border-radius: 12px;
@@ -475,6 +479,7 @@ input:focus-visible {
 }
 
 .list > .list-item.action:not(:disabled):active,
+.list > label.list-item:active,
 .list > .manage:has(> .grow:active),
 .list > :is(.article, .swipe):has(.article-link:active),
 .list > .dragging {
@@ -533,18 +538,27 @@ input:focus-visible {
 }
 
 .sorting > * {
-  transition: transform var(--md-default-spatial);
+  transition: transform var(--md-default-spatial), background-color var(--md-default-effects), color var(--md-default-effects);
 }
 
-.sorting.settling > *,
-.sorting > .dragging {
+.sorting.settling > * {
   transition: none;
+}
+
+.sorting > .dragging {
+  transition: background-color var(--md-default-effects), color var(--md-default-effects);
 }
 
 .list > .dragging {
   z-index: 1;
+  background: var(--md-tertiary-container);
+  color: var(--md-on-tertiary-container);
   box-shadow: var(--md-shadow-4);
   cursor: grabbing;
+}
+
+.list > .dragging :is(.drag-handle, .supporting, .icon-btn) {
+  color: inherit;
 }
 
 .article {
@@ -1020,6 +1034,12 @@ html.locked {
   box-shadow: inset 0 0 0 1px var(--md-primary);
 }
 
+@media (hover: hover) {
+  .field input:hover:not(:focus) {
+    border-color: var(--md-on-surface);
+  }
+}
+
 .field input::placeholder {
   color: var(--md-on-surface-variant);
   opacity: 0;
@@ -1116,7 +1136,6 @@ html.locked {
   overflow: visible;
   display: flex;
   flex-direction: column;
-  gap: 8px;
   pointer-events: none;
 }
 
@@ -1180,7 +1199,7 @@ html.locked {
   color: inherit;
 }
 
-:root[data-nav] .topbar {
+:root:is([data-nav="push"], [data-nav="pop"]) .topbar {
   view-transition-name: topbar;
 }
 
@@ -1206,6 +1225,22 @@ html.locked {
 
 :root[data-nav="pop"]::view-transition-new(root) {
   animation-name: shared-axis-back-in, fade-in;
+}
+
+:root[data-nav="tab"]::view-transition-old(root) {
+  animation: fade-out var(--md-fast-effects) both;
+}
+
+:root[data-nav="tab"]::view-transition-new(root) {
+  animation: fade-in var(--md-default-effects) 149ms both;
+}
+
+:root[data-nav="tab"]::view-transition-old(navbar) {
+  display: none;
+}
+
+:root[data-nav="tab"]::view-transition-new(navbar) {
+  animation: none;
 }
 
 @keyframes shared-axis-out {
