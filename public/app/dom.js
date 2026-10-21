@@ -143,15 +143,6 @@ export function startArrowKeys() {
   });
 }
 
-function refocus(key, frames = 30) {
-  requestAnimationFrame(() => {
-    const active = document.activeElement;
-    const handle = document.querySelector(`[data-key="${CSS.escape(key)}"] .drag-handle`);
-    if (handle && handle !== active && (!active || active === document.body || !active.isConnected)) handle.focus();
-    if (frames > 0) refocus(key, frames - 1);
-  });
-}
-
 const TAU = Math.PI * 2;
 const POINTS = 96;
 const SIZE = 48;
@@ -248,7 +239,6 @@ export function sortable(list, onSort) {
       const keys = rows.map((node) => node.dataset.key);
       keys.splice(to, 0, keys.splice(from, 1)[0]);
       onSort(keys);
-      refocus(row.dataset.key);
     };
     popMenu(handle, [
       [
@@ -500,6 +490,7 @@ const rootLength = (name) => parseFloat(getComputedStyle(document.documentElemen
 
 function openDialog(build, onClose, role = null) {
   const host = document.getElementById("dialog-host");
+  const keyboard = document.activeElement.matches(":focus-visible:not(input, textarea)");
   const app = document.getElementById("app");
   const dialog = el("dialog", { class: "dialog", tabIndex: -1, role });
   let closed = false;
@@ -538,7 +529,7 @@ function openDialog(build, onClose, role = null) {
   host.append(dialog);
   lockPage(app);
   dialog.showModal();
-  (dialog.querySelector("input:not([type=radio])") || dialog.querySelector("input[type=radio]:checked, button:not(:disabled), [href]") || dialog).focus();
+  (dialog.querySelector("input:not([type=radio])") || (keyboard && dialog.querySelector("input[type=radio]:checked, button:not(:disabled), [href]")) || dialog).focus();
   return close;
 }
 
@@ -640,6 +631,7 @@ function menuItem(item, close) {
 function popMenu(anchor, sections) {
   const host = document.getElementById("dialog-host");
   const box = anchor.getBoundingClientRect();
+  const keyboard = anchor.matches(":focus-visible");
   const dialog = el("dialog", { class: "menu-backdrop", tabIndex: -1, ariaLabel: anchor.ariaLabel || anchor.textContent });
   let closed = false;
   const close = (after) => {
@@ -676,7 +668,7 @@ function popMenu(anchor, sections) {
   dialog.addEventListener("pointerdown", (event) => {
     if (event.target === dialog) close();
   });
-  menu.addEventListener("keydown", (event) => {
+  dialog.addEventListener("keydown", (event) => {
     if (event.key === "Tab") {
       event.preventDefault();
       return close();
@@ -691,7 +683,7 @@ function popMenu(anchor, sections) {
   host.append(dialog);
   anchor.ariaExpanded = "true";
   dialog.showModal();
-  (menu.querySelector(".menu-item:not(:disabled)") || dialog).focus();
+  ((keyboard && menu.querySelector(".menu-item:not(:disabled)")) || dialog).focus();
   const below = innerHeight - rootLength("--navbar") - 8 - box.bottom;
   const above = box.top - rootLength("--topbar") - 8;
   if (menu.offsetHeight > below && above > below) {
