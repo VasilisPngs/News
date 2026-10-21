@@ -20,6 +20,13 @@ const STRINGS = {
   save: ["Save", "Αποθήκευση"],
   namePlaceholder: ["Name", "Όνομα"],
   all: ["All", "Όλες"],
+  back: ["Back", "Πίσω"],
+  refresh: ["Refresh", "Ανανέωση"],
+  loading: ["Loading", "Φόρτωση"],
+  deleteNamed: ["Delete {name}", "Διαγραφή «{name}»"],
+  moveNamed: ["Move {name}", "Μετακίνηση «{name}»"],
+  moveUp: ["Move up", "Μετακίνηση πάνω"],
+  moveDown: ["Move down", "Μετακίνηση κάτω"],
 
   forYouTitle: ["For you", "Για εσάς"],
   newTopic: ["New topic", "Νέο θέμα"],

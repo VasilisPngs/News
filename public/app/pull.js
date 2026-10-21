@@ -17,6 +17,7 @@ function build() {
   if (indicator) return indicator;
   indicator = loadingIndicator({ contained: true, determinate: true });
   indicator.classList.add("pull");
+  indicator.ariaHidden = "true";
   document.body.append(indicator);
   return indicator;
 }
@@ -98,6 +99,12 @@ function release() {
 
 addEventListener("touchend", release, { passive: true });
 addEventListener("touchcancel", release, { passive: true });
+
+export function refreshNow() {
+  if (!key || busy) return;
+  build();
+  refresh();
+}
 
 export function setPull(next, refreshFeed) {
   if (next !== key) {

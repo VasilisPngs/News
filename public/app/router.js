@@ -1,3 +1,5 @@
+import { glide } from "./dom.js";
+
 const ROUTES = [
   { pattern: /^\/$/, name: "foryou", tab: "/", params: () => ({}) },
   { pattern: /^\/following$/, name: "sources", tab: "/following", params: () => ({}) },
@@ -57,7 +59,7 @@ export function goBack(parent) {
 function openTab(root) {
   if (currentRoute().tab !== root) move(lastPaths.get(root) || root, "replace", true);
   else if (location.pathname !== root) goBack(root);
-  else scrollTo({ top: 0, behavior: "smooth" });
+  else scrollTo({ top: 0, behavior: glide() });
 }
 
 export function startRouter(fn) {
@@ -85,7 +87,7 @@ export function startRouter(fn) {
     if (!href || !href.startsWith("/")) return;
     event.preventDefault();
     if (link.closest(".navbar")) openTab(href);
-    else if (href === location.pathname) scrollTo({ top: 0, behavior: "smooth" });
+    else if (href === location.pathname) scrollTo({ top: 0, behavior: glide() });
     else navigate(href);
   });
   const path = known(location.pathname) ? location.pathname : "/";

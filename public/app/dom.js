@@ -1,3 +1,5 @@
+import { t } from "./i18n.js";
+
 export function el(tag, props = {}, children = []) {
   const node = document.createElement(tag);
   for (const [key, value] of Object.entries(props)) {
@@ -40,14 +42,99 @@ const ICONS = {
   sparkles: "m706-706-70-32q-6-3-8.5-8t-2.5-10q0-5 2.5-10t8.5-8l70-32 32-70q3-6 8-9t10-3q5 0 10 3t8 9l32 70 70 32q6 3 9 8t3 10q0 5-3 10t-9 8l-70 32-32 70q-3 6-8 8.5t-10 2.5q-5 0-10-2.5t-8-8.5l-32-70ZM260-380l-160-73q-9-4-13-11.5T83-480q0-8 4-15.5t13-11.5l160-73 73-160q4-9 11.5-13t15.5-4q8 0 15.5 4t11.5 13l73 160 160 73q9 4 13 11.5t4 15.5q0 8-4 15.5T620-453l-160 73-73 160q-4 9-11.5 13t-15.5 4q-8 0-15.5-4T333-220l-73-160Zm100 26 40-86 86-40-86-40-40-86-40 86-86 40 86 40 40 86Zm350 204-70-32q-6-3-9-8t-3-10q0-5 3-10t9-8l70-32 32-70q3-6 8-9t10-3q5 0 10 3t8 9l32 70 70 32q6 3 9 8t3 10q0 5-3 10t-9 8l-70 32-32 70q-3 6-8 9t-10 3q-5 0-10-3t-8-9l-32-70ZM360-480Z",
   news: "M160-120q-33 0-56.5-23.5T80-200v-560q0-33 23.5-56.5T160-840h640q33 0 56.5 23.5T880-760v560q0 33-23.5 56.5T800-120H160Zm0-80h640v-560H160v560Zm120-80h400q17 0 28.5-11.5T720-320q0-17-11.5-28.5T680-360H280q-17 0-28.5 11.5T240-320q0 17 11.5 28.5T280-280Zm0-160h80q17 0 28.5-11.5T400-480v-160q0-17-11.5-28.5T360-680h-80q-17 0-28.5 11.5T240-640v160q0 17 11.5 28.5T280-440Zm240 0h160q17 0 28.5-11.5T720-480q0-17-11.5-28.5T680-520H520q-17 0-28.5 11.5T480-480q0 17 11.5 28.5T520-440Zm0-160h160q17 0 28.5-11.5T720-640q0-17-11.5-28.5T680-680H520q-17 0-28.5 11.5T480-640q0 17 11.5 28.5T520-600ZM160-200v-560 560Z",
   thumbDown: "M120-320q-32 0-56-24t-24-56v-80q0-7 2-15t4-15l120-282q9-20 30-34t44-14h440v520L440-82q-15 15-35.5 17.5T365-72q-19-10-28-28t-4-37l45-183H120Zm480-34v-406H240L120-480v80h360l-54 220 174-174Zm200-486q33 0 56.5 23.5T880-760v360q0 33-23.5 56.5T800-320H680v-80h120v-360H680v-80h120Zm-200 80v406-406Z",
+  refresh: "M480-160q-134 0-227-93t-93-227q0-134 93-227t227-93q69 0 132 28.5T720-690v-70q0-17 11.5-28.5T760-800q17 0 28.5 11.5T800-760v200q0 17-11.5 28.5T760-520H560q-17 0-28.5-11.5T520-560q0-17 11.5-28.5T560-600h128q-32-56-87.5-88T480-720q-100 0-170 70t-70 170q0 100 70 170t170 70q68 0 124.5-34.5T692-367q8-14 22.5-19.5t29.5-.5q16 5 23 21t-1 30q-41 80-117 128t-169 48Z",
+  arrowUp: "M440-647 244-451q-12 12-28 11.5T188-452q-11-12-11.5-28t11.5-28l264-264q6-6 13-8.5t15-2.5q8 0 15 2.5t13 8.5l264 264q11 11 11 27.5T772-452q-12 12-28.5 12T715-452L520-647v447q0 17-11.5 28.5T480-160q-17 0-28.5-11.5T440-200v-447Z",
+  arrowDown: "M440-313v-447q0-17 11.5-28.5T480-800q17 0 28.5 11.5T520-760v447l196-196q12-12 28-11.5t28 12.5q11 12 11.5 28T772-452L508-188q-6 6-13 8.5t-15 2.5q-8 0-15-2.5t-13-8.5L188-452q-11-11-11-27.5t11-28.5q12-12 28.5-12t28.5 12l195 195Z",
   bookmarkRemove: "M640-680q-17 0-28.5-11.5T600-720q0-17 11.5-28.5T640-760h160q17 0 28.5 11.5T840-720q0 17-11.5 28.5T800-680H640ZM480-240l-168 72q-40 17-76-6.5T200-241v-519q0-33 23.5-56.5T280-840h200q17 0 28.5 11.5T520-800q0 17-11.5 28.5T480-760H280v518l200-86 200 86v-238q0-17 11.5-28.5T720-520q17 0 28.5 11.5T760-480v239q0 43-36 66.5t-76 6.5l-168-72Zm0-520H280h240-40Z"
 };
 
-export function icon(name) {
-  return svg("svg", { class: "icon", viewBox: "0 -960 960 960", "data-icon": name }, svg("path", { d: ICONS[name] }));
+export function icon(name, label) {
+  const meaning = label ? { role: "img", "aria-label": label } : { "aria-hidden": "true" };
+  return svg("svg", { class: "icon", viewBox: "0 -960 960 960", "data-icon": name, ...meaning }, svg("path", { d: ICONS[name] }));
 }
 
-export const iconButton = (name, onClick, props = {}) => el("button", { class: "icon-btn", type: "button", onclick: onClick, ...props }, icon(name));
+export const iconButton = (name, label, onClick, props = {}) => el("button", { class: "icon-btn", type: "button", ariaLabel: label, onclick: onClick, ...props }, icon(name));
+
+export const glide = () => (matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth");
+
+let ids = 0;
+const uid = () => `id-${++ids}`;
+
+const announcer = el("div", { class: "announcer", ariaLive: "polite" });
+
+function announce(message) {
+  ([...document.querySelectorAll("dialog:modal")].pop() || document.body).append(announcer);
+  announcer.textContent = "";
+  setTimeout(() => (announcer.textContent = message), 100);
+}
+
+let tip = null;
+let tipTimer = 0;
+
+function hideTip() {
+  clearTimeout(tipTimer);
+  if (tip) tip.remove();
+  tip = null;
+}
+
+function showTip(target) {
+  hideTip();
+  if (!target.isConnected) return;
+  tip = el("div", { class: "tooltip", popover: "manual", ariaHidden: "true", text: target.ariaLabel });
+  document.body.append(tip);
+  tip.showPopover();
+  const box = target.getBoundingClientRect();
+  const above = box.top - tip.offsetHeight - 4;
+  tip.style.left = `${Math.min(Math.max(8, box.left + box.width / 2 - tip.offsetWidth / 2), innerWidth - tip.offsetWidth - 8)}px`;
+  tip.style.top = `${above >= 8 ? above : box.bottom + 4}px`;
+}
+
+export function startTooltips() {
+  document.addEventListener("pointerover", (event) => {
+    const target = event.pointerType === "mouse" ? event.target.closest(".icon-btn[aria-label]") : null;
+    if (!target || target.contains(event.relatedTarget)) return;
+    clearTimeout(tipTimer);
+    tipTimer = setTimeout(() => showTip(target), 500);
+  });
+  document.addEventListener("pointerout", (event) => {
+    const target = event.target.closest(".icon-btn");
+    if (target && !target.contains(event.relatedTarget)) hideTip();
+  });
+  document.addEventListener("focusin", (event) => {
+    if (event.target.matches(".icon-btn[aria-label]:focus-visible")) showTip(event.target);
+  });
+  document.addEventListener("focusout", hideTip);
+  document.addEventListener("pointerdown", hideTip, true);
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") hideTip();
+  });
+  addEventListener("scroll", hideTip, { capture: true, passive: true });
+}
+
+const ARROWS = { ArrowDown: 1, ArrowRight: 1, ArrowUp: -1, ArrowLeft: -1 };
+
+export function startArrowKeys() {
+  document.addEventListener("keydown", (event) => {
+    const step = ARROWS[event.key];
+    if (!step || event.altKey || event.ctrlKey || event.metaKey || event.target.matches("input[type=text], textarea")) return;
+    const group = event.target.closest(".list, .chips");
+    if (!group) return;
+    const items = [...group.querySelectorAll("button:not(:disabled), a[href], input:not(:disabled)")].filter((node) => node.closest(".list, .chips") === group);
+    const index = items.indexOf(event.target);
+    if (index < 0) return;
+    event.preventDefault();
+    items[(index + step + items.length) % items.length].focus();
+  });
+}
+
+function refocus(key, frames = 30) {
+  requestAnimationFrame(() => {
+    const active = document.activeElement;
+    const handle = document.querySelector(`[data-key="${CSS.escape(key)}"] .drag-handle`);
+    if (handle && handle !== active && (!active || active === document.body || !active.isConnected)) handle.focus();
+    if (frames > 0) refocus(key, frames - 1);
+  });
+}
 
 const TAU = Math.PI * 2;
 const POINTS = 96;
@@ -93,7 +180,7 @@ function outline(from, to, progress, turn) {
 
 export function loadingIndicator({ contained = false, determinate = false } = {}) {
   const path = svg("path");
-  const node = el("div", { class: contained ? "loading-indicator contained" : "loading-indicator" }, svg("svg", { viewBox: `0 0 ${SIZE} ${SIZE}` }, path));
+  const node = el("div", { class: contained ? "loading-indicator contained" : "loading-indicator", role: "progressbar", ariaLabel: t("loading") }, svg("svg", { viewBox: `0 0 ${SIZE} ${SIZE}` }, path));
   let frame = 0;
   let started = 0;
   const draw = (now) => {
@@ -128,10 +215,35 @@ export function loadingIndicator({ contained = false, determinate = false } = {}
 export const loading = () => el("div", { class: "loading" }, loadingIndicator());
 
 export function sortable(list, onSort) {
+  let dragged = null;
+  list.addEventListener("click", (event) => {
+    const handle = event.target.closest(".drag-handle");
+    if (!handle) return;
+    if (dragged === handle) {
+      dragged = null;
+      return;
+    }
+    const rows = [...list.children];
+    const row = rows.find((child) => child.contains(handle));
+    const from = rows.indexOf(row);
+    const move = (to) => {
+      const keys = rows.map((node) => node.dataset.key);
+      keys.splice(to, 0, keys.splice(from, 1)[0]);
+      onSort(keys);
+      refocus(row.dataset.key);
+    };
+    popMenu(handle, [
+      [
+        { icon: "arrowUp", label: t("moveUp"), disabled: from === 0, onSelect: () => move(from - 1) },
+        { icon: "arrowDown", label: t("moveDown"), disabled: from === rows.length - 1, onSelect: () => move(from + 1) }
+      ]
+    ]);
+  });
   list.addEventListener("pointerdown", (event) => {
     const handle = event.target.closest(".drag-handle");
     if (!handle || event.button > 0) return;
     event.preventDefault();
+    dragged = null;
     const rows = [...list.children];
     const row = rows.find((child) => child.contains(handle));
     const from = rows.indexOf(row);
@@ -167,6 +279,7 @@ export function sortable(list, onSort) {
       layout();
     };
     const end = () => {
+      dragged = Math.abs(pointerY - startY) > 4 ? handle : null;
       cancelAnimationFrame(frame);
       handle.removeEventListener("pointermove", move);
       handle.removeEventListener("pointerup", end);
@@ -202,7 +315,7 @@ export function emptyState(symbol, title, message, action) {
 }
 
 export function switchInput(checked, onChange) {
-  return el("input", { type: "checkbox", class: "switch", checked, onchange: (event) => onChange(event.target.checked) });
+  return el("input", { type: "checkbox", class: "switch", role: "switch", checked, onchange: (event) => onChange(event.target.checked) });
 }
 
 const DISMISS_DISTANCE = 56;
@@ -306,7 +419,7 @@ function edgeFade(strip) {
   return strip;
 }
 
-export const filterChip = (label, selected, onClick) => el("button", { class: selected ? "chip on" : "chip", type: "button", onclick: onClick }, [selected ? icon("check") : null, label]);
+export const filterChip = (label, selected, onClick) => el("button", { class: selected ? "chip on" : "chip", type: "button", ariaPressed: String(selected), onclick: onClick }, [selected ? icon("check") : null, label]);
 
 export const assistChip = (label, onClick) => el("button", { class: "chip assist", type: "button", onclick: onClick }, [icon("add"), label]);
 
@@ -327,6 +440,7 @@ export function snackbar(message) {
   if (host.matches(":popover-open")) host.hidePopover();
   host.replaceChildren(node);
   host.showPopover();
+  announce(message);
   const drop = () => {
     node.remove();
     if (!host.children.length && host.matches(":popover-open")) host.hidePopover();
@@ -359,10 +473,10 @@ function unlockPage(app) {
 
 const rootLength = (name) => parseFloat(getComputedStyle(document.documentElement).getPropertyValue(name)) || 0;
 
-function openDialog(build, onClose) {
+function openDialog(build, onClose, role = null) {
   const host = document.getElementById("dialog-host");
   const app = document.getElementById("app");
-  const dialog = el("dialog", { class: "dialog", tabIndex: -1 });
+  const dialog = el("dialog", { class: "dialog", tabIndex: -1, role });
   let closed = false;
   const close = () => {
     if (closed) return;
@@ -391,11 +505,15 @@ function openDialog(build, onClose) {
     if (event.clientX < box.left || event.clientX > box.right || event.clientY < box.top || event.clientY > box.bottom) close();
   });
   append(dialog, build(close));
+  const heading = dialog.querySelector("h2");
+  if (heading) {
+    heading.id ||= uid();
+    dialog.setAttribute("aria-labelledby", heading.id);
+  }
   host.append(dialog);
   lockPage(app);
   dialog.showModal();
-  const field = dialog.querySelector("input:not([type=radio])");
-  (field || dialog).focus();
+  (dialog.querySelector("input:not([type=radio])") || dialog.querySelector("input[type=radio]:checked, button:not(:disabled), [href]") || dialog).focus();
   return close;
 }
 
@@ -452,7 +570,8 @@ export function confirmDialog(title, message, action, cancel) {
           })
         ])
       ],
-      () => resolve(answer)
+      () => resolve(answer),
+      "alertdialog"
     );
   });
 }
@@ -460,12 +579,13 @@ export function confirmDialog(title, message, action, cancel) {
 export function chooseDialog(title, options, current) {
   return new Promise((resolve) => {
     let answer = null;
+    const heading = el("h2", { id: uid(), text: title });
     openDialog(
       (close) => [
-        el("h2", { text: title }),
+        heading,
         el(
           "div",
-          { class: "choices" },
+          { class: "choices", role: "radiogroup", "aria-labelledby": heading.id },
           options.map((option) =>
             el("label", { class: "choice" }, [
               el("input", {
@@ -486,4 +606,73 @@ export function chooseDialog(title, options, current) {
       () => resolve(answer)
     );
   });
+}
+
+function menuItem(item, close) {
+  return el("button", { class: "menu-item", type: "button", role: "menuitem", disabled: item.disabled, onclick: () => close(item.onSelect) }, [item.icon ? icon(item.icon) : null, el("span", { class: "menu-label", text: item.label })]);
+}
+
+function popMenu(anchor, sections) {
+  const host = document.getElementById("dialog-host");
+  const box = anchor.getBoundingClientRect();
+  const dialog = el("dialog", { class: "menu-backdrop", tabIndex: -1, ariaLabel: anchor.ariaLabel || anchor.textContent });
+  let closed = false;
+  const close = (after) => {
+    if (closed) return;
+    closed = true;
+    anchor.ariaExpanded = "false";
+    dialog.classList.add("closing");
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      dialog.close();
+      dialog.remove();
+      if (after) after();
+    };
+    menu.addEventListener("transitionend", (event) => {
+      if (event.target === menu) finish();
+    });
+    setTimeout(finish, 300);
+  };
+  const menu = el("div", { class: "menu", role: "menu" }, sections.map((items) => el("div", { class: "menu-section", role: "none" }, items.map((item) => menuItem(item, close)))));
+  const width = document.documentElement.clientWidth;
+  if (box.left + box.width / 2 < width / 2) {
+    menu.style.left = `${box.left}px`;
+    menu.classList.add("from-left");
+  } else {
+    menu.style.right = `${width - box.right}px`;
+  }
+  dialog.append(menu);
+  dialog.addEventListener("cancel", (event) => {
+    event.preventDefault();
+    close();
+  });
+  dialog.addEventListener("pointerdown", (event) => {
+    if (event.target === dialog) close();
+  });
+  menu.addEventListener("keydown", (event) => {
+    if (event.key === "Tab") {
+      event.preventDefault();
+      return close();
+    }
+    const items = [...menu.querySelectorAll(".menu-item:not(:disabled)")];
+    const index = items.indexOf(document.activeElement);
+    const next = { ArrowDown: index + 1, ArrowRight: index + 1, ArrowUp: index - 1, ArrowLeft: index - 1, Home: 0, End: items.length - 1 }[event.key];
+    if (next === undefined || !items.length) return;
+    event.preventDefault();
+    items[index < 0 ? 0 : (next + items.length) % items.length].focus();
+  });
+  host.append(dialog);
+  anchor.ariaExpanded = "true";
+  dialog.showModal();
+  (menu.querySelector(".menu-item:not(:disabled)") || dialog).focus();
+  const below = innerHeight - rootLength("--navbar") - 8 - box.bottom;
+  const above = box.top - rootLength("--topbar") - 8;
+  if (menu.offsetHeight > below && above > below) {
+    menu.style.bottom = `${innerHeight - box.top + 4}px`;
+    menu.classList.add("from-bottom");
+  } else {
+    menu.style.top = `${box.bottom + 4}px`;
+  }
 }

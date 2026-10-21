@@ -4,6 +4,7 @@ import { appState, feed, loadFeed, addSource, feedFailed } from "../store.js";
 import { readLocal, writeLocal } from "../storage.js";
 import { navigate } from "../router.js";
 import { articleList } from "./articles.js";
+import { refreshNow } from "../pull.js";
 
 const barActions = document.getElementById("bar-actions");
 const SOURCE_KEY = "news.source";
@@ -52,7 +53,8 @@ export function renderSources(container) {
   const stored = readLocal(SOURCE_KEY);
   const active = sources.some((source) => source.id === stored) ? stored : null;
   container.dataset.title = t("sourcesTitle");
-  barActions.append(iconButton("add", newSource));
+  if (sources.length) barActions.append(iconButton("refresh", t("refresh"), refreshNow));
+  barActions.append(iconButton("add", t("newSource"), newSource));
   if (sources.length === 0) {
     container.append(page(emptyState("news", t("noSources"), t("noSourcesHint"), el("button", { class: "btn", type: "button", text: t("newSource"), onclick: newSource }))));
     return;

@@ -1,4 +1,4 @@
-import { el } from "./dom.js";
+import { el, startTooltips, startArrowKeys } from "./dom.js";
 import { startShell, scrollViewTop, watchBars } from "./shell.js";
 import { storeEvents, status, loadState, loadFeed, finishDwell, pullRefresh } from "./store.js";
 import { currentRoute, navigation, startRouter } from "./router.js";
@@ -56,7 +56,10 @@ function render() {
   deferredRender = false;
   const { restore, animate } = navigation();
   for (const tab of tabs) {
-    tab.classList.toggle("current", tab.getAttribute("href") === route.tab);
+    const current = tab.getAttribute("href") === route.tab;
+    tab.classList.toggle("current", current);
+    tab.ariaSelected = String(current);
+    tab.tabIndex = current ? 0 : -1;
     const label = tab.querySelector(".nav-label");
     if (label) label.textContent = t(TAB_LABELS[tab.dataset.route]);
   }
@@ -82,7 +85,7 @@ function render() {
     }
     watchBars();
   };
-  if (direction && !document.documentElement.dataset.nav) {
+  if (direction && !document.documentElement.dataset.nav && !matchMedia("(prefers-reduced-motion: reduce)").matches) {
     document.documentElement.dataset.nav = direction;
     const transition = document.startViewTransition(update);
     transition.finished.finally(() => delete document.documentElement.dataset.nav);
@@ -94,7 +97,7 @@ function render() {
 function paintBanner() {
   const { auth } = status();
   if (auth && !banner) {
-    banner = el("div", { class: "banner" }, [
+    banner = el("div", { class: "banner", role: "alert" }, [
       el("span", { text: t("sessionExpired") }),
       el("button", { class: "btn text", type: "button", text: t("statusSignIn"), onclick: () => (location.href = `/?signin=${Date.now()}`) })
     ]);
@@ -168,8 +171,25 @@ document.addEventListener("pointercancel", release, true);
 view.addEventListener("focusout", renderDeferred);
 view.addEventListener("swipeend", renderDeferred);
 
+const TAB_KEYS = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 };
+
+document.querySelector(".navbar").addEventListener("keydown", (event) => {
+  const index = tabs.indexOf(event.target);
+  if (index < 0) return;
+  if (event.key === " ") {
+    event.preventDefault();
+    return event.target.click();
+  }
+  const next = event.key === "Home" ? 0 : event.key === "End" ? tabs.length - 1 : TAB_KEYS[event.key] ? (index + TAB_KEYS[event.key] + tabs.length) % tabs.length : -1;
+  if (next < 0) return;
+  event.preventDefault();
+  tabs[next].focus();
+});
+
 function boot() {
   startShell();
+  startTooltips();
+  startArrowKeys();
   applyLanguage();
   applyTheme();
   storeEvents.addEventListener("changed", () => {

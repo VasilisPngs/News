@@ -61,18 +61,18 @@ export function renderSettings(container) {
   container.append(section(t("preferences"), el("div", { class: "list" }, [choice(t("theme"), themes, themeMode(), setTheme), choice(t("language"), tongues, language(), setLanguage)])));
 }
 
-function manageList(container, title, rows, onAdd) {
-  barLead.append(iconButton("back", () => goBack("/settings")));
-  barActions.append(iconButton("add", onAdd));
+function manageList(container, title, rows, addLabel, onAdd) {
+  barLead.append(iconButton("back", t("back"), () => goBack("/settings")));
+  barActions.append(iconButton("add", addLabel, onAdd));
   container.dataset.title = title;
   if (rows.children.length) container.append(section(null, rows));
 }
 
 function manageRow(id, label, detail, { onRename, onDelete, draggable }) {
   return el("div", { class: "list-item manage", "data-key": id }, [
-    draggable ? el("span", { class: "drag-handle" }, icon("grip")) : null,
+    draggable ? el("button", { class: "drag-handle", type: "button", ariaLabel: t("moveNamed", { name: label }), ariaHasPopup: "menu", ariaExpanded: "false" }, icon("grip")) : null,
     el("button", { class: "grow", type: "button", onclick: onRename }, [el("div", { text: label }), detail ? el("div", { class: "supporting", text: detail }) : null]),
-    iconButton("trash", onDelete)
+    iconButton("trash", t("deleteNamed", { name: label }), onDelete)
   ]);
 }
 
@@ -104,7 +104,7 @@ export function renderTopics(container) {
       })
     )
   );
-  manageList(container, t("topics"), rows, newTopic);
+  manageList(container, t("topics"), rows, t("newTopic"), newTopic);
   const chips = categoryChips();
   if (chips) container.append(section(t("categories"), chips));
 }
@@ -134,5 +134,5 @@ export function renderSourceList(container) {
       })
     )
   );
-  manageList(container, t("sources"), sortable(rows, (ids) => attempt(() => orderSources(ids))), newSource);
+  manageList(container, t("sources"), sortable(rows, (ids) => attempt(() => orderSources(ids))), t("newSource"), newSource);
 }

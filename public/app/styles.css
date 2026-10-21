@@ -41,6 +41,7 @@
   --md-surface: light-dark(#faf9fe, #0d0e12);
   --md-on-surface: light-dark(#2f323a, #e3e5f0);
   --md-on-surface-variant: light-dark(#5c5f68, #a8abb5);
+  --md-surface-container-low: light-dark(#f3f3fa, #111318);
   --md-surface-container: light-dark(#ededf6, #171a1f);
   --md-surface-container-high: light-dark(#e7e7f1, #1d2026);
   --md-surface-container-highest: light-dark(#e0e2ed, #23262d);
@@ -161,7 +162,7 @@ a {
   fill: currentColor;
 }
 
-:where(.icon-btn, .btn, .chip, .nav-indicator, .list-item.action, label.list-item, .article, .manage)::after {
+:where(.icon-btn, .btn, .chip, .nav-indicator, .list-item.action, label.list-item, .article, .manage, .menu-item)::after {
   content: "";
   position: absolute;
   inset: 0;
@@ -173,7 +174,7 @@ a {
 }
 
 @media (hover: hover) {
-  :is(.icon-btn, .btn, .chip, .list-item.action, label.list-item):not(:disabled):hover::after,
+  :is(.icon-btn, .btn, .chip, .list-item.action, label.list-item, .menu-item):not(:disabled):hover::after,
   .nav-item:hover .nav-indicator::after,
   .article:has(.article-link:hover)::after,
   .manage:has(> .grow:hover)::after {
@@ -181,7 +182,7 @@ a {
   }
 }
 
-:is(.icon-btn, .btn, .chip, .list-item.action, label.list-item):not(:disabled):active::after,
+:is(.icon-btn, .btn, .chip, .list-item.action, label.list-item, .menu-item):not(:disabled):active::after,
 .nav-item:active .nav-indicator::after,
 .article:has(.article-link:active)::after,
 .manage:has(> .grow:active)::after {
@@ -440,7 +441,7 @@ label.list-item {
   cursor: pointer;
 }
 
-:is(.list-item.action, label.list-item, .article, .manage)::after {
+:is(.list-item.action, label.list-item, .article, .manage, .menu-item)::after {
   background: var(--md-on-surface);
 }
 
@@ -530,8 +531,16 @@ label.list-item {
 }
 
 .drag-handle {
+  flex: none;
   display: grid;
   place-items: center;
+  width: 44px;
+  height: 44px;
+  margin-inline: -12px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: none;
   color: var(--md-on-surface-variant);
   touch-action: none;
   cursor: grab;
@@ -1270,5 +1279,167 @@ html.locked {
 @keyframes fade-out {
   to {
     opacity: 0;
+  }
+}
+
+.menu-backdrop {
+  position: fixed;
+  inset: 0;
+  width: auto;
+  height: auto;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  overflow: visible;
+}
+
+.menu-backdrop::backdrop {
+  background: transparent;
+}
+
+.menu-backdrop:focus {
+  outline: none;
+}
+
+.menu {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 200px;
+  max-width: min(280px, calc(100% - 32px));
+  filter: drop-shadow(0 1px 2px rgb(0 0 0 / 0.3)) drop-shadow(0 2px 6px rgb(0 0 0 / 0.15));
+  transform-origin: top right;
+  animation: menu-in var(--md-default-spatial), fade-in var(--md-fast-effects);
+  transition: opacity var(--md-fast-effects);
+}
+
+.menu.from-left {
+  transform-origin: top left;
+}
+
+.menu.from-bottom {
+  transform-origin: bottom right;
+}
+
+.menu.from-bottom.from-left {
+  transform-origin: bottom left;
+}
+
+.menu-backdrop.closing .menu {
+  opacity: 0;
+}
+
+@keyframes menu-in {
+  from {
+    transform: scale(0.8);
+  }
+}
+
+.menu-section {
+  display: flex;
+  flex-direction: column;
+  padding: 2px 4px;
+  border-radius: 8px;
+  background: var(--md-surface-container-low);
+  overflow: hidden;
+}
+
+.menu-section:first-child {
+  border-top-left-radius: 16px;
+  border-top-right-radius: 16px;
+}
+
+.menu-section:last-child {
+  border-bottom-left-radius: 16px;
+  border-bottom-right-radius: 16px;
+}
+
+.menu-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: var(--md-on-surface);
+  font: 500 0.875rem/1.25rem var(--md-font);
+  letter-spacing: 0.006rem;
+  text-align: start;
+  cursor: pointer;
+}
+
+.menu-item:first-child:not(:only-child) {
+  border-top-left-radius: 12px;
+  border-top-right-radius: 12px;
+}
+
+.menu-item:last-child:not(:only-child) {
+  border-bottom-left-radius: 12px;
+  border-bottom-right-radius: 12px;
+}
+
+.menu-item .icon {
+  width: 20px;
+  height: 20px;
+  color: var(--md-on-surface-variant);
+}
+
+.menu-item:disabled {
+  color: color-mix(in srgb, var(--md-on-surface) 38%, transparent);
+  cursor: default;
+}
+
+.menu-item:disabled .icon {
+  opacity: 0.38;
+}
+
+.menu-label {
+  padding-block: 8px;
+}
+
+.tooltip {
+  position: fixed;
+  inset: auto;
+  min-width: 40px;
+  max-width: 200px;
+  min-height: 24px;
+  margin: 0;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: 4px;
+  background: var(--md-inverse-surface);
+  color: var(--md-inverse-on-surface);
+  font: 400 0.75rem/1rem var(--md-font);
+  letter-spacing: 0.025rem;
+  text-align: center;
+  pointer-events: none;
+  animation: fade-in var(--md-fast-effects);
+}
+
+.announcer {
+  position: fixed;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dialog,
+  .dialog::backdrop,
+  .menu,
+  .snackbar,
+  .tooltip {
+    animation: none;
+    transition: none;
   }
 }

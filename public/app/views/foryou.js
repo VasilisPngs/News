@@ -2,6 +2,7 @@ import { el, iconButton, emptyState, promptDialog, snackbar, loading, assistChip
 import { t, categories } from "../i18n.js";
 import { appState, feed, loadFeed, addTopic, markSeen, feedFailed } from "../store.js";
 import { articleList } from "./articles.js";
+import { refreshNow } from "../pull.js";
 
 const barActions = document.getElementById("bar-actions");
 const SEEN_MS = 1000;
@@ -77,7 +78,8 @@ function page(state) {
 
 export function renderForYou(container) {
   container.dataset.title = t("forYouTitle");
-  barActions.append(iconButton("add", newTopic));
+  if (appState().topics.length) barActions.append(iconButton("refresh", t("refresh"), refreshNow));
+  barActions.append(iconButton("add", t("newTopic"), newTopic));
   if (appState().topics.length === 0) {
     container.append(
       page(emptyState("sparkles", t("noTopics"), t("noTopicsHint"), el("button", { class: "btn", type: "button", text: t("newTopic"), onclick: newTopic }))),
