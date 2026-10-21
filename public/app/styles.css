@@ -633,12 +633,13 @@ label.list-item {
   object-fit: cover;
 }
 
-.article .icon-btn {
+.article-actions {
   grid-area: save;
   justify-self: end;
+  display: flex;
 }
 
-.with-image .icon-btn {
+.with-image .article-actions {
   margin-inline-end: -12px;
 }
 

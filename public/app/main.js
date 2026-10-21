@@ -1,4 +1,4 @@
-import { el, startTooltips, startArrowKeys } from "./dom.js";
+import { el, startTooltips, startArrowKeys, keepFocus } from "./dom.js";
 import { startShell, scrollViewTop, watchBars } from "./shell.js";
 import { storeEvents, status, loadState, loadFeed, finishDwell, pullRefresh } from "./store.js";
 import { currentRoute, navigation, startRouter } from "./router.js";
@@ -12,6 +12,7 @@ import { loadPush } from "./push.js";
 import { readLocal } from "./storage.js";
 import { setPull } from "./pull.js";
 
+const app = document.getElementById("app");
 const view = document.getElementById("view");
 const barLead = document.getElementById("bar-lead");
 const barActions = document.getElementById("bar-actions");
@@ -69,13 +70,17 @@ function render() {
   const lateral = from !== to ? (to > from ? "push" : "pop") : null;
   const direction = animate && changed && lastTab ? (route.tab === lastTab ? lateral : "tab") : null;
   if (changed) positions.set(lastRouteKey, scrollY);
-  const update = () => {
+  const draw = () => {
     view.replaceChildren();
     barLead.replaceChildren();
     barActions.replaceChildren();
     delete view.dataset.title;
     delete view.dataset.editing;
     VIEWS[route.name](view, route.params);
+  };
+  const update = () => {
+    if (changed) draw();
+    else keepFocus(app, draw);
     setPull(route.name === "foryou" || route.name === "sources" ? route.name : null, () => pullRefresh(route.name, readLocal("news.source")));
     if (changed) {
       lastRouteKey = key;

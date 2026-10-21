@@ -55,6 +55,7 @@ const STRINGS = {
   noSaved: ["Nothing saved", "Κανένα αποθηκευμένο"],
   noSavedHint: ["Tap the bookmark on an article to keep it for later.", "Πάτα το σημάδι αποθήκευσης σε ένα άρθρο για να το κρατήσεις για αργότερα."],
 
+  lessLikeThis: ["Fewer stories like this", "Λιγότερα σαν αυτό"],
   lessDone: ["You'll see fewer stories like this.", "Θα βλέπεις λιγότερα τέτοια."],
 
   settingsTitle: ["Settings", "Ρυθμίσεις"],

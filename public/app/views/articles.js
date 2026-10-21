@@ -69,7 +69,10 @@ function articleRow(article, mode) {
       meta(article),
       thumbnail(article, content)
     ]),
-    iconButton(article.saved ? "bookmarkFilled" : "bookmark", t("save"), () => act(article, article.saved ? "unsave" : "save"), { class: article.saved ? "icon-btn selected" : "icon-btn", ariaPressed: String(Boolean(article.saved)) })
+    el("div", { class: "article-actions" }, [
+      mode === "foryou" ? iconButton("thumbDown", t("lessLikeThis"), (event) => event.currentTarget.closest(".swipe").dismiss()) : null,
+      iconButton(article.saved ? "bookmarkFilled" : "bookmark", t("save"), () => act(article, article.saved ? "unsave" : "save"), { class: article.saved ? "icon-btn selected" : "icon-btn", ariaPressed: String(Boolean(article.saved)) })
+    ])
   );
   if (mode === "foryou") return swipeAction(content, "thumbDown", () => act(article, "less"));
   if (mode === "saved") return swipeAction(content, "bookmarkRemove", () => act(article, "unsave"));

@@ -57,6 +57,22 @@ export const iconButton = (name, label, onClick, props = {}) => el("button", { c
 
 export const glide = () => (matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth");
 
+const FOCUSABLE = "button:not(:disabled), a[href]:not([role=tab]), input:not(:disabled), textarea";
+
+const focusables = (node) => [...node.querySelectorAll(FOCUSABLE)];
+
+export function keepFocus(scope, work) {
+  const active = document.activeElement;
+  const row = active.closest("[data-key]");
+  const spot = focusables(scope).indexOf(active);
+  const inner = row ? focusables(row).indexOf(active) : -1;
+  work();
+  if (spot < 0 || (document.activeElement !== document.body && document.activeElement.isConnected)) return;
+  const twin = row && scope.querySelector(`[data-key="${CSS.escape(row.dataset.key)}"]`);
+  const items = focusables(twin || scope);
+  items[twin ? inner : Math.min(spot, items.length - 1)]?.focus({ preventScroll: true });
+}
+
 let ids = 0;
 const uid = () => `id-${++ids}`;
 
@@ -406,6 +422,7 @@ export function swipeAction(content, symbol, onAction) {
     },
     true
   );
+  wrap.dismiss = dismiss;
   return wrap;
 }
 
