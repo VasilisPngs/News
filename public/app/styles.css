@@ -34,8 +34,6 @@
   --md-secondary: light-dark(#575f72, #bfc6dc);
   --md-secondary-container: light-dark(#dbe2f9, #343b4d);
   --md-on-secondary-container: light-dark(#4a5264, #b7bfd5);
-  --md-tertiary-container: light-dark(#e4ceff, #e4ceff);
-  --md-on-tertiary-container: light-dark(#54436b, #54436b);
   --md-error-container: light-dark(#fa746f, #871f21);
   --md-on-error-container: light-dark(#6e0a12, #ff9993);
   --md-surface: light-dark(#faf9fe, #0d0e12);
@@ -560,8 +558,8 @@ label.list-item {
 
 .list > .dragging {
   z-index: 1;
-  background: var(--md-tertiary-container);
-  color: var(--md-on-tertiary-container);
+  background: var(--md-secondary-container);
+  color: var(--md-on-secondary-container);
   box-shadow: var(--md-shadow-4);
   cursor: grabbing;
 }

@@ -230,6 +230,8 @@ export function loadingIndicator({ contained = false, determinate = false } = {}
 
 export const loading = () => el("div", { class: "loading" }, loadingIndicator());
 
+const TOUCH_SLOP = 8;
+
 export function sortable(list, onSort) {
   let dragged = null;
   list.addEventListener("click", (event) => {
@@ -269,6 +271,7 @@ export function sortable(list, onSort) {
     let pointerY = startY;
     let to = from;
     let frame = 0;
+    let started = false;
     const offset = () => Math.max(-from * step, Math.min((rows.length - 1 - from) * step, pointerY - startY + scrollY - startScroll));
     const layout = () => {
       const dy = offset();
@@ -292,14 +295,22 @@ export function sortable(list, onSort) {
     };
     const move = (moveEvent) => {
       pointerY = moveEvent.clientY;
+      if (!started) {
+        if (Math.abs(pointerY - startY) < TOUCH_SLOP) return;
+        started = true;
+        list.classList.add("sorting");
+        row.classList.add("dragging");
+        frame = requestAnimationFrame(edge);
+      }
       layout();
     };
     const end = () => {
-      dragged = Math.abs(pointerY - startY) > 4 ? handle : null;
+      dragged = started ? handle : null;
       cancelAnimationFrame(frame);
       handle.removeEventListener("pointermove", move);
       handle.removeEventListener("pointerup", end);
       handle.removeEventListener("pointercancel", end);
+      if (!started) return;
       const dy = offset();
       list.classList.add("settling");
       for (const other of rows) if (other !== row) other.style.removeProperty("transform");
@@ -316,12 +327,9 @@ export function sortable(list, onSort) {
       }, 360);
     };
     handle.setPointerCapture(event.pointerId);
-    list.classList.add("sorting");
-    row.classList.add("dragging");
     handle.addEventListener("pointermove", move);
     handle.addEventListener("pointerup", end);
     handle.addEventListener("pointercancel", end);
-    frame = requestAnimationFrame(edge);
   });
   return list;
 }
