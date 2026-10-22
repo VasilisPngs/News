@@ -10,6 +10,7 @@
 - Use what Google and the platform already provide before writing anything: Google's components with their defaults, libraries and samples, and on the web the browser's built-in elements and APIs. Write custom code only where nothing official exists or the official one does not behave as Google's guidance requires.
 - Frontend, UI and UX are uniform, symmetrical and consistent across screens and apps, with correct alignment and geometry, always by Google's measurements.
 - This file never fixes spacings or dimensions: every size, spacing, corner, breakpoint and threshold comes from Google's current tokens, guidelines and sources, so the apps follow Google when its values change.
+- Accessibility, reduced motion included, follows Google's guidance on every platform, using the platform's built-in semantics before anything custom.
 - Do the work end to end.
 - Do not undo settled decisions or weaken requirements without a real technical reason.
 - Prefer root-cause fixes and the simplest architecture that fully satisfies the requirements.
@@ -35,6 +36,7 @@
 
 ## Web
 - Web apps follow the same Google guidance as Android: Material 3 Expressive as m3.material.io defines it. Google ships no Material 3 Expressive library for the web and Material Web is in maintenance mode, so the components are written in plain HTML, CSS and JavaScript from the official Compose Material 3 tokens, never from third-party ports.
+- The web apps run as home-screen apps on the newest iOS and in the newest Chrome on Windows: a web feature is used once both support it, and a prefix or fallback that either still needs stays.
 - Colors are the Material 3 color roles that Material Color Utilities generates with `SchemeTonalSpot`, spec version 2025, from the seed `#4285F4`, written as CSS custom properties with `light-dark()`; the web has no dynamic color.
 - Text uses Google Sans woff2 files from Google Fonts, served by the app itself in the latin, latin-ext and greek subsets, with the Material 3 type scale; every form control, text areas included, inherits it, so typed text uses the body large style.
 - Icons are Material Symbols Rounded inline SVG paths, never the Outlined or Sharp styles: unfilled (FILL 0) when not selected and filled (FILL 1) only in the selected state, as Google's navigation bar samples do; an icon whose unfilled and filled versions are identical is not used for a selectable item.
