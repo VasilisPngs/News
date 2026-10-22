@@ -36,7 +36,7 @@
 
 ## Web
 - Web apps follow the same Google guidance as Android: Material 3 Expressive as m3.material.io defines it. Google ships no Material 3 Expressive library for the web and Material Web is in maintenance mode, so the components are written in plain HTML, CSS and JavaScript from the official Compose Material 3 tokens, never from third-party ports.
-- The web apps run as home-screen apps on the newest iOS and in the newest Chrome on Windows: a web feature is used once both support it, and a prefix or fallback that either still needs stays.
+- The web apps run as home-screen apps on the newest iOS and in the newest Chrome on Windows: a web feature is used once both support it, a feature that only one of them supports is used only on that one and only where it is needed, and a prefix or fallback that either still needs stays.
 - Colors are the Material 3 color roles that Material Color Utilities generates with `SchemeTonalSpot`, spec version 2025, from the seed `#4285F4`, written as CSS custom properties with `light-dark()`; the web has no dynamic color.
 - Text uses Google Sans woff2 files from Google Fonts, served by the app itself in the latin, latin-ext and greek subsets, with the Material 3 type scale; every form control, text areas included, inherits it, so typed text uses the body large style.
 - Icons are Material Symbols Rounded inline SVG paths, never the Outlined or Sharp styles: unfilled (FILL 0) when not selected and filled (FILL 1) only in the selected state, as Google's navigation bar samples do; an icon whose unfilled and filled versions are identical is not used for a selectable item.
