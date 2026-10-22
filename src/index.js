@@ -435,8 +435,7 @@ async function pushRoute(request, env) {
       keys.auth,
       Date.now()
     ),
-    setMeta(env, "origin", new URL(request.url).origin),
-    setMeta(env, "lang", body.lang === "en" ? "en" : "el")
+    setMeta(env, "origin", new URL(request.url).origin)
   ]);
   return json({ ok: true });
 }
@@ -671,13 +670,12 @@ export async function notify(env, now, touched) {
     if (!best || lead.affinity > best.lead.affinity) best = { story, coverage, lead };
   }
   if (!best) return null;
-  const [jwk, origin, lang] = await Promise.all([vapidKey(env), getMeta(env, "origin"), getMeta(env, "lang")]);
+  const [jwk, origin] = await Promise.all([vapidKey(env), getMeta(env, "origin")]);
   if (!origin) return null;
-  const greek = lang !== "en";
   const notification = {
     title: best.lead.title,
-    body: `${best.lead.source} · ${best.coverage} ${greek ? "πηγές" : "sources"}`,
-    lang: greek ? "el" : "en",
+    body: `${best.lead.source} · ${best.coverage} πηγές`,
+    lang: "el",
     tag: best.story,
     navigate: `${origin}/`,
     silent: false

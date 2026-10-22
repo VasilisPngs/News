@@ -6,7 +6,7 @@ import { renderForYou } from "./views/foryou.js";
 import { renderSources } from "./views/sources.js";
 import { renderSaved } from "./views/saved.js";
 import { renderSettings, renderTopics, renderSourceList } from "./views/settings.js";
-import { t, applyLanguage, i18nEvents } from "./i18n.js";
+import { t } from "./i18n.js";
 import { applyTheme } from "./theme.js";
 import { loadPush } from "./push.js";
 import { readLocal } from "./storage.js";
@@ -195,13 +195,11 @@ function boot() {
   startShell();
   startTooltips();
   startArrowKeys();
-  applyLanguage();
   applyTheme();
   storeEvents.addEventListener("changed", () => {
     paintBanner();
     render();
   });
-  i18nEvents.addEventListener("changed", () => render());
   startRouter(render);
   refreshedAt = Date.now();
   loadState().catch(() => {});

@@ -1,5 +1,5 @@
 import { el, iconButton, emptyState, promptDialog, snackbar, loading, assistChip } from "../dom.js";
-import { t, categories } from "../i18n.js";
+import { t, CATEGORIES } from "../i18n.js";
 import { appState, feed, loadFeed, addTopic, markSeen, feedFailed } from "../store.js";
 import { articleList } from "./articles.js";
 import { refreshNow } from "../pull.js";
@@ -65,7 +65,7 @@ export async function newTopic() {
 
 export function categoryChips() {
   const taken = new Set(appState().topics.map((topic) => topic.name.toLocaleLowerCase()));
-  const chips = categories()
+  const chips = CATEGORIES
     .filter((name) => !taken.has(name.toLocaleLowerCase()))
     .map((name) => assistChip(name, () => addTopic(name).catch(() => snackbar(t("actionFailed")))));
   return chips.length ? el("div", { class: "chips wrap" }, chips) : null;

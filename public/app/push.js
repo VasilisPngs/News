@@ -1,4 +1,3 @@
-import { language } from "./i18n.js";
 import { appState, post } from "./store.js";
 
 let subscription = null;
@@ -27,7 +26,7 @@ export async function enablePush() {
   if (!appState().pushKey) throw new Error("no_key");
   subscription = await (await manager()).subscribe({ userVisibleOnly: true, applicationServerKey: serverKey() });
   try {
-    await post("/api/push", { action: "subscribe", subscription: subscription.toJSON(), lang: language() });
+    await post("/api/push", { action: "subscribe", subscription: subscription.toJSON() });
   } catch (error) {
     await disablePush();
     throw error;

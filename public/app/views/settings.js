@@ -1,5 +1,5 @@
 import { el, icon, iconButton, snackbar, confirmDialog, chooseDialog, promptDialog, switchInput, sortable } from "../dom.js";
-import { t, language, languages, setLanguage, formatter } from "../i18n.js";
+import { t, formatter } from "../i18n.js";
 import { goBack } from "../router.js";
 import { themeMode, themeModes, setTheme } from "../theme.js";
 import { pushSupported, pushEnabled, enablePush, disablePush } from "../push.js";
@@ -57,8 +57,7 @@ export function renderSettings(container) {
   }
 
   const themes = themeModes().map((mode) => ({ value: mode, label: t(`theme${mode[0].toUpperCase()}${mode.slice(1)}`) }));
-  const tongues = languages().map((code) => ({ value: code, label: formatter(Intl.DisplayNames, { type: "language" }, code).of(code) }));
-  container.append(section(t("preferences"), el("div", { class: "list" }, [choice(t("theme"), themes, themeMode(), setTheme), choice(t("language"), tongues, language(), setLanguage)])));
+  container.append(section(t("preferences"), el("div", { class: "list" }, [choice(t("theme"), themes, themeMode(), setTheme)])));
 }
 
 function manageList(container, title, rows, addLabel, onAdd) {
