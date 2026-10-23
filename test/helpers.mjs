@@ -3,7 +3,7 @@ import { DatabaseSync } from "node:sqlite";
 import { readdirSync, readFileSync } from "node:fs";
 import { base64UrlDecode, base64UrlEncode } from "../src/push.js";
 
-export function database() {
+function database() {
   const db = new DatabaseSync(":memory:");
   const dir = new URL("../migrations/", import.meta.url);
   for (const file of readdirSync(dir).sort()) db.exec(readFileSync(new URL(file, dir), "utf8"));
