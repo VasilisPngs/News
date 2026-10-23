@@ -41,8 +41,7 @@ const WEIGHTS = { open: 0.5, read: 1.5, bounce: -1, save: 1, less: -1.5 };
 const BOUNCE_SECONDS = 10;
 const READ_SECONDS = 60;
 
-const json = (body, status = 200) =>
-  new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" } });
+const json = (body, status = 200) => Response.json(body, { status, headers: { "cache-control": "no-store" } });
 
 const readJson = async (request) => (await request.json().catch(() => null)) || {};
 

@@ -76,12 +76,8 @@ export function keepFocus(scope, work) {
 let ids = 0;
 const uid = () => `id-${++ids}`;
 
-const announcer = el("div", { class: "announcer", ariaLive: "polite" });
-
 function announce(message) {
-  ([...document.querySelectorAll("dialog:modal")].pop() || document.body).append(announcer);
-  announcer.textContent = "";
-  setTimeout(() => (announcer.textContent = message), 100);
+  ([...document.querySelectorAll("dialog:modal")].pop() || document).ariaNotify(message);
 }
 
 let tip = null;
@@ -424,16 +420,6 @@ export function swipeAction(content, symbol, onAction) {
   return wrap;
 }
 
-function edgeFade(strip) {
-  const edges = () => {
-    strip.classList.toggle("more-start", strip.scrollLeft > 1);
-    strip.classList.toggle("more-end", strip.scrollLeft + strip.clientWidth < strip.scrollWidth - 1);
-  };
-  strip.addEventListener("scroll", edges, { passive: true });
-  new ResizeObserver(edges).observe(strip);
-  return strip;
-}
-
 export const filterChip = (label, selected, onClick) => el("button", { class: selected ? "chip on" : "chip", type: "button", ariaPressed: String(selected), onclick: onClick }, [selected ? icon("check") : null, label]);
 
 export const assistChip = (label, onClick) => el("button", { class: "chip assist", type: "button", onclick: onClick }, [icon("add"), label]);
@@ -446,7 +432,7 @@ export function chipStrip(chips) {
     const over = pressed.getBoundingClientRect().right - strip.getBoundingClientRect().right;
     if (over > 0) strip.scrollLeft += over + 32;
   });
-  return edgeFade(strip);
+  return strip;
 }
 
 export function snackbar(message) {
@@ -543,7 +529,7 @@ export function promptDialog(title, value, { label, hint, action, cancel, requir
     openDialog(
       (close) => {
         const done = textButton(action, { type: "submit" });
-        const input = el("input", { type: "text", autocomplete: "off", value: value || "", placeholder: hint || " ", enterKeyHint: "done" });
+        const input = el("input", { type: "text", name: "value", autocomplete: "off", value: value || "", placeholder: hint || " ", enterKeyHint: "done" });
         const initial = (value || "").trim();
         const check = () => {
           const next = input.value.trim();

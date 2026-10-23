@@ -692,6 +692,9 @@ label.list-item {
   overflow-x: auto;
   overflow-y: hidden;
   scrollbar-width: none;
+  mask-image: linear-gradient(to right, transparent, #000 var(--chips-start), #000 calc(100% - var(--chips-end)), transparent);
+  animation: chips-edges linear both;
+  animation-timeline: scroll(self inline);
 }
 
 .chips.wrap {
@@ -699,16 +702,34 @@ label.list-item {
   overflow: visible;
 }
 
-.chips.more-end {
-  mask-image: linear-gradient(to right, #000 calc(100% - 32px), transparent);
+@property --chips-start {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
 }
 
-.chips.more-start {
-  mask-image: linear-gradient(to left, #000 calc(100% - 32px), transparent);
+@property --chips-end {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
 }
 
-.chips.more-start.more-end {
-  mask-image: linear-gradient(to right, transparent, #000 32px, #000 calc(100% - 32px), transparent);
+@keyframes chips-edges {
+  from {
+    --chips-start: 0px;
+    --chips-end: 32px;
+  }
+
+  1%,
+  99% {
+    --chips-start: 32px;
+    --chips-end: 32px;
+  }
+
+  to {
+    --chips-start: 32px;
+    --chips-end: 0px;
+  }
 }
 
 @media (pointer: fine) {
@@ -1421,15 +1442,6 @@ html.locked {
   text-align: center;
   pointer-events: none;
   animation: fade-in var(--md-fast-effects);
-}
-
-.announcer {
-  position: fixed;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip-path: inset(50%);
-  white-space: nowrap;
 }
 
 @media (prefers-reduced-motion: reduce) {
