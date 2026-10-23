@@ -8,11 +8,6 @@ const manager = async () => window.pushManager || (await navigator.serviceWorker
 
 export const pushEnabled = () => Boolean(subscription) && Notification.permission === "granted";
 
-function serverKey() {
-  const padded = appState().pushKey.replace(/-/g, "+").replace(/_/g, "/");
-  return Uint8Array.from(atob(padded + "=".repeat((4 - (padded.length % 4)) % 4)), (char) => char.charCodeAt(0));
-}
-
 export async function loadPush() {
   if (!pushSupported) return;
   try {
@@ -24,7 +19,7 @@ export async function loadPush() {
 
 export async function enablePush() {
   if (!appState().pushKey) throw new Error("no_key");
-  subscription = await (await manager()).subscribe({ userVisibleOnly: true, applicationServerKey: serverKey() });
+  subscription = await (await manager()).subscribe({ userVisibleOnly: true, applicationServerKey: Uint8Array.fromBase64(appState().pushKey, { alphabet: "base64url" }) });
   try {
     await post("/api/push", { action: "subscribe", subscription: subscription.toJSON() });
   } catch (error) {

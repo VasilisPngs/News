@@ -1,13 +1,13 @@
 import { glide } from "./dom.js";
 
 const ROUTES = [
-  { pattern: /^\/$/, name: "foryou", tab: "/", params: () => ({}) },
-  { pattern: /^\/following$/, name: "sources", tab: "/following", params: () => ({}) },
-  { pattern: /^\/saved$/, name: "saved", tab: "/saved", params: () => ({}) },
-  { pattern: /^\/settings$/, name: "settings", tab: "/settings", params: () => ({}) },
-  { pattern: /^\/settings\/topics$/, name: "topics", tab: "/settings", params: () => ({}) },
-  { pattern: /^\/settings\/following$/, name: "sourceList", tab: "/settings", params: () => ({}) }
-];
+  ["/", "foryou", "/"],
+  ["/following", "sources", "/following"],
+  ["/saved", "saved", "/saved"],
+  ["/settings", "settings", "/settings"],
+  ["/settings/topics", "topics", "/settings"],
+  ["/settings/following", "sourceList", "/settings"]
+].map(([pathname, name, tab]) => ({ pattern: new URLPattern({ pathname }), name, tab }));
 
 const lastPaths = new Map();
 let renderer = null;
@@ -16,15 +16,15 @@ let motion = { restore: false, animate: true };
 export function currentRoute() {
   const path = location.pathname;
   for (const route of ROUTES) {
-    const match = path.match(route.pattern);
-    if (match) return { name: route.name, tab: route.tab, params: route.params(match) };
+    const match = route.pattern.exec({ pathname: path });
+    if (match) return { name: route.name, tab: route.tab, params: match.pathname.groups };
   }
   return { name: "foryou", tab: "/", params: {} };
 }
 
 export const navigation = () => motion;
 
-const known = (path) => ROUTES.some((route) => route.pattern.test(path));
+const known = (path) => ROUTES.some((route) => route.pattern.test({ pathname: path }));
 
 function previousEntry() {
   const index = window.navigation.currentEntry.index;
