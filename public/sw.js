@@ -1,4 +1,4 @@
-const VERSION = "v36";
+const VERSION = "v37";
 const CACHE = `news-${VERSION}`;
 
 const SHELL = [
@@ -29,7 +29,7 @@ const SHELL = [
 
 self.addEventListener("install", (event) => {
   self.skipWaiting();
-  event.addRoutes?.({ condition: { urlPattern: "/api/*" }, source: "network" });
+  event.addRoutes({ condition: { urlPattern: "/api/*" }, source: "network" });
   event.waitUntil(
     caches.open(CACHE).then((cache) => cache.addAll(SHELL.map((path) => new Request(path, { cache: "reload" }))))
   );
@@ -60,7 +60,6 @@ self.addEventListener("fetch", (event) => {
   if (request.method !== "GET") return;
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
-  if (url.pathname.startsWith("/api/")) return;
   if (url.searchParams.has("signin")) return;
   event.respondWith(shellFirst(request, request.mode === "navigate" ? "/" : request));
 });
