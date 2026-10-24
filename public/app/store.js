@@ -10,6 +10,7 @@ export const storeEvents = new EventTarget();
 let state = readJson("news.state") || { topics: [], sources: [], pushKey: null };
 const feeds = new Map();
 const loading = new Map();
+const extending = new Map();
 let auth = false;
 let offline = false;
 
@@ -92,12 +93,14 @@ export function loadFeed(tab, source = null, force = false) {
   if (!force && current && current.fresh && Date.now() - current.at < STALE_MS) return Promise.resolve(current);
   if (loading.has(key)) return loading.get(key);
   const request = post("/api/feed", { tab, source })
-    .then(({ items }) => {
-      const next = { items: items || [], at: Date.now(), fresh: true };
+    .then(({ items = [], more }) => {
       const previous = feeds.get(key);
+      const last = items.at(-1);
+      const older = more !== undefined && previous && last ? previous.items.filter((item) => item.published < last.published || (item.published === last.published && item.id < last.id)) : [];
+      const next = { items: [...items, ...older], at: Date.now(), fresh: true, more: older.length ? previous.more !== false : Boolean(more), stored: items.length };
       const recovered = failed.delete(key);
       feeds.set(key, next);
-      writeJson(`news.feed.${key}`, { items: next.items, at: next.at });
+      writeJson(`news.feed.${key}`, { items, at: next.at });
       if (recovered || !previous || JSON.stringify(previous.items) !== JSON.stringify(next.items)) changed();
       return next;
     })
@@ -111,6 +114,23 @@ export function loadFeed(tab, source = null, force = false) {
     .finally(() => loading.delete(key));
   loading.set(key, request);
   return request;
+}
+
+export function loadMore(tab, source = null) {
+  const key = feedKey(tab, source);
+  const current = feed(tab, source);
+  const last = current && current.items.at(-1);
+  if (!last || current.more === false || extending.has(key) || loading.has(key)) return;
+  const request = post("/api/feed", { tab, source, before: { at: last.published, id: last.id } })
+    .then(({ items = [], more = false }) => {
+      const latest = feeds.get(key) || current;
+      const known = new Set(latest.items.map((item) => item.id));
+      feeds.set(key, { ...latest, items: [...latest.items, ...items.filter((item) => !known.has(item.id))], more });
+      changed();
+    })
+    .catch(() => {})
+    .finally(() => extending.delete(key));
+  extending.set(key, request);
 }
 
 function warmForYou() {
@@ -171,7 +191,7 @@ function patch(update) {
   for (const [key, current] of feeds) {
     const items = update(current.items.map((item) => ({ ...item })), key).filter(Boolean);
     feeds.set(key, { ...current, items });
-    writeJson(`news.feed.${key}`, { items, at: current.at });
+    writeJson(`news.feed.${key}`, { items: items.slice(0, current.stored ?? items.length), at: current.at });
   }
   changed();
 }

@@ -40,10 +40,7 @@ function attribute(element, name) {
 
 function blocks(text, name) {
   const pattern = new RegExp(`<${name}(?:\\s[^>]*)?>([\\s\\S]*?)</${name}>`, "gi");
-  const found = [];
-  let match;
-  while (found.length < MAX_ITEMS && (match = pattern.exec(text))) found.push(match[1]);
-  return found;
+  return Array.from(text.matchAll(pattern), (match) => match[1]);
 }
 
 function absolute(link, base) {
@@ -114,16 +111,17 @@ export function parseFeed(text, base, now = Date.now()) {
   const head = text.slice(0, first > 0 ? first : 5000);
   const title = clean(tag(head, "title"));
   const site = absolute(atom ? atomLink(head) : clean(tag(head, "link")), base);
+  const entries = blocks(text, atom ? "entry" : "item").map((block) => ({ block, published: time(clean(atom ? tag(block, "published") || tag(block, "updated") : tag(block, "pubDate") || tag(block, "dc:date")), now) }));
+  const newest = new Set(entries.toSorted((a, b) => b.published - a.published).slice(0, MAX_ITEMS));
   const items = [];
-  for (const block of blocks(text, atom ? "entry" : "item")) {
+  for (const { block, published } of entries.filter((entry) => newest.has(entry))) {
     const source = block.match(/<source\b[^>]*>([\s\S]*?)<\/source>/i);
     const sourceName = source ? clean(source[1]) : "";
     let heading = clean(tag(block, "title"));
     if (sourceName && heading.endsWith(` - ${sourceName}`)) heading = heading.slice(0, -sourceName.length - 3).trim();
     const link = absolute(atom ? atomLink(block) : clean(tag(block, "link")) || clean(tag(block, "guid")), base);
     if (!heading || !link) continue;
-    const stamp = atom ? tag(block, "published") || tag(block, "updated") : tag(block, "pubDate") || tag(block, "dc:date");
-    items.push({ title: heading.slice(0, 300), url: link, source: sourceName.slice(0, 80), image: image(block, base), published: time(clean(stamp), now) });
+    items.push({ title: heading.slice(0, 300), url: link, source: sourceName.slice(0, 80), image: image(block, base), published });
   }
   const ahead = Math.max(0, ...items.map((item) => item.published - now));
   const shift = ahead > 60000 && ahead <= SKEW_LIMIT_MS ? Math.ceil(ahead / HOUR_MS) * HOUR_MS : 0;

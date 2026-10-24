@@ -1,6 +1,6 @@
 import { el, iconButton, emptyState, promptDialog, snackbar, chipStrip, filterChip, loading } from "../dom.js";
 import { t, dayLabel, dayStart } from "../i18n.js";
-import { appState, feed, loadFeed, addSource, feedFailed } from "../store.js";
+import { appState, feed, loadFeed, loadMore, addSource, feedFailed } from "../store.js";
 import { readLocal, writeLocal } from "../storage.js";
 import { navigate } from "../router.js";
 import { articleList } from "./articles.js";
@@ -8,6 +8,7 @@ import { refreshNow } from "../pull.js";
 
 const barActions = document.getElementById("bar-actions");
 const SOURCE_KEY = "news.source";
+let observer = null;
 
 export async function newSource() {
   const url = await promptDialog(t("newSource"), "", { label: t("sourceLabel"), hint: t("sourcePlaceholder"), action: t("add"), cancel: t("cancel"), required: true });
@@ -73,4 +74,16 @@ export function renderSources(container) {
   for (const [day, items] of byDay(current.items)) {
     container.append(el("section", { class: "group" }, [el("h2", { text: dayLabel(day) }), articleList(items, "sources")]));
   }
+  observer?.disconnect();
+  if (current.more === false) return;
+  const more = loading();
+  more.classList.add("more");
+  container.append(more);
+  observer = new IntersectionObserver(
+    (entries) => {
+      if (entries.some((entry) => entry.isIntersecting)) loadMore("sources", active);
+    },
+    { rootMargin: "0px 0px 100% 0px" }
+  );
+  observer.observe(more);
 }

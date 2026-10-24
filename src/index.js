@@ -21,6 +21,7 @@ const ERROR_RETENTION_MS = 30 * 86400000;
 const FOR_YOU_LIMIT = 60;
 const EXPLORE_EVERY = 5;
 const VIEW_PENALTY = 0.12;
+const FRESHNESS = 1;
 const VIEW_CAP = 6;
 const VIEW_GAP_MS = 30 * 60000;
 const PULL_STALE_MS = 2 * 60000;
@@ -316,7 +317,7 @@ export function pick(rows, now, limit = FOR_YOU_LIMIT) {
   const median = sorted.length ? sorted[Math.floor(sorted.length / 2)] : 0;
   const quartile = sorted.length ? sorted[Math.floor(sorted.length / 4)] : 0;
   const spread = (sorted.at(-1) ?? 0) - median || 1;
-  const novelty = (row) => Math.min(row.coverage - 1, 5) * 0.05 - ((now - row.published_at) / WINDOW_MS) * 0.2 - Math.min(row.views || 0, VIEW_CAP) * VIEW_PENALTY;
+  const novelty = (row) => Math.min(row.coverage - 1, 5) * 0.05 - ((now - row.published_at) / WINDOW_MS) * FRESHNESS - Math.min(row.views || 0, VIEW_CAP) * VIEW_PENALTY;
   const score = (row) => (row.affinity - median) / spread + novelty(row);
   const usual = rows.filter((row) => row.affinity >= median).sort((a, b) => score(b) - score(a));
   const fresh = rows.filter((row) => row.affinity >= quartile && row.affinity < median).sort((a, b) => novelty(b) - novelty(a));
@@ -340,26 +341,37 @@ async function feedRoute(request, env) {
   }
   if (body.tab === "sources") {
     const owner = typeof body.source === "string" && body.source ? body.source : null;
+    const before = body.before && Number.isFinite(body.before.at) && typeof body.before.id === "string" ? body.before : null;
+    const params = [SOURCES_LIMIT, ...(owner ? [owner] : []), ...(before ? [before.at, before.id] : [])];
     const rows = await env.DB.prepare(
-      `SELECT a.id, a.title, a.url, s.title AS source, s.icon, a.published_at, a.opened_at, a.saved_at, a.image FROM articles a JOIN sources s ON s.id = a.owner WHERE a.owner IN (SELECT id FROM sources WHERE hidden = 0${owner ? " AND id = ?2" : ""}) ORDER BY a.published_at DESC LIMIT ?1`
+      `SELECT a.id, a.title, a.url, s.title AS source, s.icon, a.published_at, a.opened_at, a.saved_at, a.image FROM articles a JOIN sources s ON s.id = a.owner WHERE a.owner IN (SELECT id FROM sources WHERE hidden = 0${owner ? " AND id = ?2" : ""})${before ? ` AND (a.published_at, a.id) < (?${params.length - 1}, ?${params.length})` : ""} ORDER BY a.published_at DESC, a.id DESC LIMIT ?1`
     )
-      .bind(...(owner ? [SOURCES_LIMIT, owner] : [SOURCES_LIMIT]))
+      .bind(...params)
       .all();
-    return json({ items: rows.results.map(item) });
+    return json({ items: rows.results.map(item), more: rows.results.length === SOURCES_LIMIT });
   }
-  const rows = await env.DB.prepare(
-    `SELECT a.id, a.title, a.url, s.title AS source, s.icon, a.published_at, NULL AS opened_at, lead.saved AS saved_at, (SELECT COUNT(DISTINCT b.owner) FROM articles b WHERE b.story = a.story) AS coverage, a.image, a.affinity, a.tokens, lead.views FROM (
-      SELECT MAX(CASE WHEN owner IN (SELECT id FROM sources WHERE hidden = 1) THEN printf('%.17f|%d|%s', affinity + 1, published_at, id) END) AS pick, MAX(saved_at) AS saved, MAX(views) AS views
+  const stories = await env.DB.prepare(
+    `SELECT MAX(CASE WHEN owner IN (SELECT id FROM sources WHERE hidden = 1) THEN printf('%.17f|%d|%s|%s|%s', affinity + 1, published_at, id, owner, tokens) END) AS pick, COUNT(DISTINCT owner) AS coverage, MAX(saved_at) AS saved, MAX(views) AS views
       FROM articles INDEXED BY articles_time
       WHERE vector IS NOT NULL AND published_at > ?1 AND owner IN (SELECT id FROM sources)
       GROUP BY story
-      HAVING pick IS NOT NULL AND MAX(opened_at) IS NULL AND story NOT IN (SELECT story FROM articles WHERE hidden_at IS NOT NULL)
-      ORDER BY substr(pick, 21, 13) DESC LIMIT ?2
-    ) lead JOIN articles a ON a.id = substr(lead.pick, 35) JOIN sources s ON s.id = a.owner ORDER BY a.published_at DESC`
+      HAVING pick IS NOT NULL AND MAX(opened_at) IS NULL AND story NOT IN (SELECT story FROM articles WHERE hidden_at IS NOT NULL)`
   )
-    .bind(now - WINDOW_MS, RESCORE_LIMIT)
+    .bind(now - WINDOW_MS)
     .all();
-  return json({ items: pick(rows.results, now).map(item) });
+  const rows = stories.results
+    .map((row) => {
+      const [score, published, id, owner, words] = row.pick.split("|");
+      return { id, affinity: Number(score) - 1, published_at: Number(published), source: owner, tokens: words, coverage: row.coverage, saved_at: row.saved, views: row.views };
+    })
+    .sort((a, b) => b.published_at - a.published_at);
+  const picked = pick(rows, now);
+  if (picked.length === 0) return json({ items: [] });
+  const leads = await env.DB.prepare(`SELECT a.id, a.title, a.url, s.title AS source, s.icon, a.image FROM articles a JOIN sources s ON s.id = a.owner WHERE a.id IN (${slots(picked.length)})`)
+    .bind(...picked.map((row) => row.id))
+    .all();
+  const shown = new Map(leads.results.map((row) => [row.id, row]));
+  return json({ items: picked.filter((row) => shown.has(row.id)).map((row) => item({ ...row, ...shown.get(row.id) })) });
 }
 
 async function articleRoute(request, env) {

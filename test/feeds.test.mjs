@@ -37,6 +37,12 @@ test("a feed that labels local time with the wrong offset is shifted back by who
   assert.equal(scheduled.items[0].published, NOW);
 });
 
+test("a feed out of date order still gives its 40 newest stories, in the feed's own order", () => {
+  const items = Array.from({ length: 50 }, (_, index) => ({ title: `Story ${index}`, link: `https://mixed.example/${index}`, at: NOW - (index < 25 ? 10 + index : index - 25) * 3600000 }));
+  const kept = [...Array(15).keys(), ...Array.from({ length: 25 }, (_, index) => 25 + index)];
+  assert.deepEqual(parseFeed(rss(items), "https://mixed.example/rss", NOW).items.map((item) => item.title), kept.map((index) => `Story ${index}`));
+});
+
 test("each item takes its picture from media tags, enclosures or the first real image in its text", () => {
   const xml = `<?xml version="1.0"?><rss xmlns:media="http://search.yahoo.com/mrss/" xmlns:content="http://purl.org/rss/1.0/modules/content/"><channel><title>Pics</title>
     <item><title>Media</title><link>https://p.example/1</link><media:content url="https://cdn.example/big.jpg" medium="image" width="1600"/><media:content url="https://cdn.example/small.jpg" medium="image" width="320"/><media:content url="https://cdn.example/clip.mp4" type="video/mp4"/></item>

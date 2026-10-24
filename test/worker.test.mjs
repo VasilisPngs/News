@@ -106,11 +106,12 @@ test("site suggestions are read from any reply layout, and a topic's sites are t
   assert.equal(rows(env, "SELECT COUNT(*) AS n FROM feeds")[0].n, 2);
 });
 
-test("the median gate keeps the better half and relevance outweighs freshness", () => {
+test("the median gate keeps the better half and freshness weighs as much as relevance", () => {
   const now = Date.now();
   const row = (id, affinity, coverage = 1, age = 0) => ({ id, affinity, coverage, published_at: now - age * HOUR });
   const picked = pick([row("a", 0.1), row("b", 0.5, 1, 40), row("c", 0.45, 3, 1), row("d", 0.2), row("e", 0.3), row("f", 0.48, 1, 2), row("g", 0.05)], now);
   assert.deepEqual(picked.map((entry) => entry.id), ["f", "c", "b", "e"]);
+  assert.deepEqual(pick([row("old", 0.5, 1, 47), row("new", 0.45), row("m", 0.4), row("l1", 0.2), row("l2", 0.1)], now).map((entry) => entry.id), ["new", "old", "m"]);
   assert.deepEqual(pick([row("x", 0), row("y", 0)], now).map((entry) => entry.id).sort(), ["x", "y"]);
   assert.deepEqual(pick([], now), []);
 });
@@ -292,6 +293,23 @@ test("a source is found from its site, listed newest first and can be renamed, o
   feed = (await api(worker, env, "/api/feed", { tab: "sources" })).json.items;
   assert.deepEqual(feed.map((item) => item.title), ["Second post"]);
   assert.deepEqual(await forYou(env), []);
+});
+
+test("Following hands out older articles page by page until the last one", async () => {
+  const env = environment();
+  const now = Date.now();
+  env.DB.sqlite.prepare("INSERT INTO sources (id, title, site, feed, position, created_at) VALUES ('s', 'Site', 'https://site.example/', 'https://site.example/feed', 0, ?)").run(now);
+  const insert = env.DB.sqlite.prepare("INSERT INTO articles (id, owner, story, title, url, source, published_at, seen_at, tokens) VALUES (?1, 's', ?1, ?2, ?3, 'site.example', ?4, ?4, '')");
+  for (let index = 0; index < 130; index += 1) insert.run(`a${String(index).padStart(3, "0")}`, `Story ${index}`, `https://site.example/${index}`, now - Math.floor(index / 2) * HOUR);
+  const first = (await api(worker, env, "/api/feed", { tab: "sources" })).json;
+  assert.equal(first.items.length, 120);
+  assert.equal(first.more, true);
+  const last = first.items.at(-1);
+  const rest = (await api(worker, env, "/api/feed", { tab: "sources", before: { at: last.published, id: last.id } })).json;
+  assert.equal(rest.more, false);
+  const all = [...first.items, ...rest.items];
+  assert.equal(new Set(all.map((item) => item.id)).size, 130);
+  assert.ok(all.every((item, index) => index === 0 || item.published <= all[index - 1].published));
 });
 
 test("source articles carry their picture, and older ones get it filled in on the next fetch", async () => {

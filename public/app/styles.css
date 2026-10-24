@@ -918,6 +918,10 @@ label.list-item {
   animation: fade-in var(--md-default-effects) 0.3s both;
 }
 
+.loading.more {
+  min-height: 0;
+}
+
 .loading-indicator {
   display: grid;
   place-items: center;
