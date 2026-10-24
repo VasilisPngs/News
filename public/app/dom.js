@@ -326,7 +326,7 @@ export function emptyState(symbol, title, message, action) {
 }
 
 export function switchInput(checked, onChange) {
-  return el("input", { type: "checkbox", class: "switch", role: "switch", checked, onchange: (event) => onChange(event.target.checked) });
+  return el("input", { type: "checkbox", class: "switch", role: "switch", name: "enabled", checked, onchange: (event) => onChange(event.target.checked) });
 }
 
 const DISMISS_DISTANCE = 56;
