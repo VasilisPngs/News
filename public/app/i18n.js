@@ -53,10 +53,6 @@ const STRINGS = {
   lessLikeThis: "Λιγότερα σαν αυτό",
   lessDone: "Θα βλέπεις λιγότερα τέτοια.",
 
-  fullCoverage: "Πλήρης κάλυψη",
-  noCoverage: "Κανένα άρθρο",
-  noCoverageHint: "Τα άρθρα αυτής της είδησης δεν είναι πια διαθέσιμα.",
-
   settingsTitle: "Ρυθμίσεις",
   content: "Περιεχόμενο",
   topics: "Θέματα",
@@ -98,6 +94,10 @@ export const CATEGORIES = [
   "Ταξίδια"
 ];
 
+const PLURALS = {
+  source: ["πηγή", "πηγές"]
+};
+
 const LOCALE = "el-GR";
 
 const formatters = new Map();
@@ -115,6 +115,10 @@ export function t(key, params) {
   if (!params) return value;
   return value.replace(/\{(\w+)\}/g, (match, name) => (params[name] === undefined ? match : String(params[name])));
 }
+
+const isOne = (count) => formatter(Intl.PluralRules).select(count) === "one";
+
+export const tn = (count, key) => `${formatter(Intl.NumberFormat).format(count)} ${PLURALS[key][isOne(count) ? 0 : 1]}`;
 
 export function dayStart(time, offset = 0) {
   const day = new Date(time);

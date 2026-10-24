@@ -3,7 +3,6 @@ import { startShell, scrollViewTop, watchBars } from "./shell.js";
 import { storeEvents, status, loadState, loadFeed, finishDwell, pullRefresh } from "./store.js";
 import { currentRoute, navigation, startRouter } from "./router.js";
 import { renderForYou } from "./views/foryou.js";
-import { renderStory } from "./views/story.js";
 import { renderSources } from "./views/sources.js";
 import { renderSaved } from "./views/saved.js";
 import { renderSettings, renderTopics, renderSourceList } from "./views/settings.js";
@@ -21,7 +20,6 @@ const tabs = [...document.querySelectorAll(".nav-item")];
 
 const VIEWS = {
   foryou: renderForYou,
-  story: renderStory,
   sources: renderSources,
   saved: renderSaved,
   settings: renderSettings,
@@ -29,7 +27,7 @@ const VIEWS = {
   sourceList: renderSourceList
 };
 
-const DEPTH = { story: 1, topics: 1, sourceList: 1 };
+const DEPTH = { topics: 1, sourceList: 1 };
 
 const TAB_LABELS = { foryou: "tabForYou", sources: "tabSources", saved: "tabSaved", settings: "tabSettings" };
 

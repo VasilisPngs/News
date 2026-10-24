@@ -281,7 +281,6 @@ async function sourcesRoute(request, env, ctx) {
 
 const item = (row) => ({
   id: row.id,
-  story: row.story,
   title: row.title,
   url: row.url,
   source: row.source,
@@ -336,24 +335,16 @@ async function feedRoute(request, env) {
   const now = Date.now();
   if (body.tab === "saved") {
     const rows = await env.DB.prepare(
-      "SELECT a.id, a.story, a.title, a.url, COALESCE(s.title, a.source) AS source, s.icon, a.published_at, a.opened_at, a.saved_at, a.image FROM articles a LEFT JOIN sources s ON s.id = a.owner WHERE a.saved_at IS NOT NULL ORDER BY a.saved_at DESC"
+      "SELECT a.id, a.title, a.url, COALESCE(s.title, a.source) AS source, s.icon, a.published_at, a.opened_at, a.saved_at, a.image FROM articles a LEFT JOIN sources s ON s.id = a.owner WHERE a.saved_at IS NOT NULL ORDER BY a.saved_at DESC"
     ).all();
     return json({ items: rows.results.map(item) });
   }
-  if (body.tab === "story") {
-    const rows = await env.DB.prepare(
-      "SELECT a.id, a.story, a.title, a.url, s.title AS source, s.icon, a.published_at, a.opened_at, a.saved_at, a.image FROM articles a JOIN sources s ON s.id = a.owner WHERE a.story = ?1 ORDER BY a.published_at DESC, a.id DESC"
-    )
-      .bind(typeof body.id === "string" ? body.id : "")
-      .all();
-    return json({ items: rows.results.map(item) });
-  }
   if (body.tab === "sources") {
-    const owner = typeof body.id === "string" && body.id ? body.id : null;
+    const owner = typeof body.source === "string" && body.source ? body.source : null;
     const before = body.before && Number.isFinite(body.before.at) && typeof body.before.id === "string" ? body.before : null;
     const params = [SOURCES_LIMIT, ...(owner ? [owner] : []), ...(before ? [before.at, before.id] : [])];
     const rows = await env.DB.prepare(
-      `SELECT a.id, a.story, a.title, a.url, s.title AS source, s.icon, a.published_at, a.opened_at, a.saved_at, a.image FROM articles a JOIN sources s ON s.id = a.owner WHERE a.owner IN (SELECT id FROM sources WHERE hidden = 0${owner ? " AND id = ?2" : ""})${before ? ` AND (a.published_at, a.id) < (?${params.length - 1}, ?${params.length})` : ""} ORDER BY a.published_at DESC, a.id DESC LIMIT ?1`
+      `SELECT a.id, a.title, a.url, s.title AS source, s.icon, a.published_at, a.opened_at, a.saved_at, a.image FROM articles a JOIN sources s ON s.id = a.owner WHERE a.owner IN (SELECT id FROM sources WHERE hidden = 0${owner ? " AND id = ?2" : ""})${before ? ` AND (a.published_at, a.id) < (?${params.length - 1}, ?${params.length})` : ""} ORDER BY a.published_at DESC, a.id DESC LIMIT ?1`
     )
       .bind(...params)
       .all();
@@ -376,7 +367,7 @@ async function feedRoute(request, env) {
     .sort((a, b) => b.published_at - a.published_at);
   const picked = pick(rows, now);
   if (picked.length === 0) return json({ items: [] });
-  const leads = await env.DB.prepare(`SELECT a.id, a.story, a.title, a.url, s.title AS source, s.icon, a.image FROM articles a JOIN sources s ON s.id = a.owner WHERE a.id IN (${slots(picked.length)})`)
+  const leads = await env.DB.prepare(`SELECT a.id, a.title, a.url, s.title AS source, s.icon, a.image FROM articles a JOIN sources s ON s.id = a.owner WHERE a.id IN (${slots(picked.length)})`)
     .bind(...picked.map((row) => row.id))
     .all();
   const shown = new Map(leads.results.map((row) => [row.id, row]));
