@@ -421,7 +421,7 @@ async function subscribed(env, endpoint) {
     [
       target.subscription.endpoint,
       async (request) => {
-        pushes.push({ authorization: request.headers.get("authorization"), body: JSON.parse(await decrypt(new Uint8Array(await request.arrayBuffer()), target)) });
+        pushes.push({ authorization: request.headers.get("authorization"), body: JSON.parse(await decrypt(await request.bytes(), target)) });
         return new Response(null, { status: 201 });
       }
     ]
