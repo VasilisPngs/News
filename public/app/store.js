@@ -72,10 +72,12 @@ export async function loadState() {
   setState(await post("/api/state"));
 }
 
-const feedKey = (tab, source) => (tab === "sources" && source ? `sources:${source}` : tab);
+const feedKey = (tab, id) => (id ? `${tab}:${id}` : tab);
 
-export function feed(tab, source = null) {
-  const key = feedKey(tab, source);
+const kept = (key) => !key.startsWith("story:");
+
+export function feed(tab, id = null) {
+  const key = feedKey(tab, id);
   if (!feeds.has(key)) {
     const stored = readJson(`news.feed.${key}`);
     if (stored) feeds.set(key, stored);
@@ -85,14 +87,14 @@ export function feed(tab, source = null) {
 
 const failed = new Set();
 
-export const feedFailed = (tab, source = null) => failed.has(feedKey(tab, source));
+export const feedFailed = (tab, id = null) => failed.has(feedKey(tab, id));
 
-export function loadFeed(tab, source = null, force = false) {
-  const key = feedKey(tab, source);
-  const current = feed(tab, source);
+export function loadFeed(tab, id = null, force = false) {
+  const key = feedKey(tab, id);
+  const current = feed(tab, id);
   if (!force && current && current.fresh && Date.now() - current.at < STALE_MS) return Promise.resolve(current);
   if (loading.has(key)) return loading.get(key);
-  const request = post("/api/feed", { tab, source })
+  const request = post("/api/feed", { tab, id })
     .then(({ items = [], more }) => {
       const previous = feeds.get(key);
       const last = items.at(-1);
@@ -100,7 +102,7 @@ export function loadFeed(tab, source = null, force = false) {
       const next = { items: [...items, ...older], at: Date.now(), fresh: true, more: older.length ? previous.more !== false : Boolean(more), stored: items.length };
       const recovered = failed.delete(key);
       feeds.set(key, next);
-      writeJson(`news.feed.${key}`, { items, at: next.at });
+      if (kept(key)) writeJson(`news.feed.${key}`, { items, at: next.at });
       if (recovered || !previous || JSON.stringify(previous.items) !== JSON.stringify(next.items)) changed();
       return next;
     })
@@ -116,12 +118,12 @@ export function loadFeed(tab, source = null, force = false) {
   return request;
 }
 
-export function loadMore(tab, source = null) {
-  const key = feedKey(tab, source);
-  const current = feed(tab, source);
+export function loadMore(tab, id = null) {
+  const key = feedKey(tab, id);
+  const current = feed(tab, id);
   const last = current && current.items.at(-1);
   if (!last || current.more === false || extending.has(key) || loading.has(key)) return;
-  const request = post("/api/feed", { tab, source, before: { at: last.published, id: last.id } })
+  const request = post("/api/feed", { tab, id, before: { at: last.published, id: last.id } })
     .then(({ items = [], more = false }) => {
       const latest = feeds.get(key) || current;
       const known = new Set(latest.items.map((item) => item.id));
@@ -191,7 +193,7 @@ function patch(update) {
   for (const [key, current] of feeds) {
     const items = update(current.items.map((item) => ({ ...item })), key).filter(Boolean);
     feeds.set(key, { ...current, items });
-    writeJson(`news.feed.${key}`, { items: items.slice(0, current.stored ?? items.length), at: current.at });
+    if (kept(key)) writeJson(`news.feed.${key}`, { items: items.slice(0, current.stored ?? items.length), at: current.at });
   }
   changed();
 }
@@ -211,7 +213,7 @@ export async function pullRefresh(tab, source) {
 }
 
 export function markOpened(article) {
-  patch((items, key) => (key === "foryou" ? items.filter((item) => item.id !== article.id) : items.map((item) => (item.id === article.id ? { ...item, opened: true } : item))));
+  patch((items, key) => (key === "foryou" ? items.filter((item) => item.id !== article.id && item.story !== article.story) : items.map((item) => (item.id === article.id ? { ...item, opened: true } : item))));
   beacon({ id: article.id, action: "open" });
   writeJson(DWELL_KEY, { id: article.id, at: Date.now() });
 }

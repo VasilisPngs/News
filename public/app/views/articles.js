@@ -1,6 +1,7 @@
 import { el, iconButton, swipeAction, snackbar } from "../dom.js";
-import { t, tn, ago } from "../i18n.js";
+import { t, ago } from "../i18n.js";
 import { markOpened, articleAction } from "../store.js";
+import { navigate } from "../router.js";
 
 const PICTURE_LIMIT = 300;
 const pictures = new Map();
@@ -39,9 +40,9 @@ function sourceIcon(article) {
 }
 
 function meta(article) {
-  const parts = [article.source, ago(article.published)];
-  if (article.coverage > 1) parts.push(tn(article.coverage, "source"));
-  return el("span", { class: "supporting article-meta" }, [sourceIcon(article), el("span", { text: parts.filter(Boolean).join(" · ") })]);
+  const time = ago(article.published);
+  const byline = article.source ? [el("span", { text: article.source }), el("span", { text: ` · ${time}` })] : el("span", { text: time });
+  return el("span", { class: "supporting article-meta" }, [sourceIcon(article), el("span", { class: "byline" }, byline)]);
 }
 
 async function act(article, action) {
@@ -70,6 +71,7 @@ function articleRow(article, mode) {
       thumbnail(article, content)
     ]),
     el("div", { class: "article-actions" }, [
+      mode === "foryou" && article.coverage > 1 ? iconButton("fullCoverage", t("fullCoverage"), () => navigate(`/story/${article.story}`)) : null,
       mode === "foryou" ? iconButton("thumbDown", t("lessLikeThis"), (event) => event.currentTarget.closest(".swipe").dismiss()) : null,
       iconButton(article.saved ? "bookmarkFilled" : "bookmark", t("save"), () => act(article, article.saved ? "unsave" : "save"), { class: article.saved ? "icon-btn selected" : "icon-btn", ariaPressed: String(Boolean(article.saved)) })
     ])

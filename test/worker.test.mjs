@@ -20,7 +20,7 @@ const gazzetta = (now) =>
 const sport = (now) =>
   rss(
     [
-      { title: "Λεβαντόφσκι και Γιαμάλ διέλυσαν τη Γαλατάσαραϊ", link: "https://sport.example/b1", at: now - 2 * HOUR },
+      { title: "Λεβαντόφσκι: Γαλατάσαραϊ - Μπαρτσελόνα 1-4, ο Πολωνός διέλυσε τη Γαλατάσαραϊ", link: "https://sport.example/b1", at: now - 2 * HOUR },
       { title: "Παναθηναϊκός: Ήττα στην Τούμπα", link: "https://sport.example/b2", at: now - 5 * HOUR }
     ],
     "Sport24"
@@ -54,7 +54,7 @@ const storyOf = (env, title) => rows(env, "SELECT story FROM articles WHERE titl
 
 const PEDRI = "Μπαρτσελόνα: Ανανέωση συμβολαίου για τον Πέδρι";
 
-test("For You picks from the sites the AI found for your topics, grouped by story, never from the ones you follow", async () => {
+test("For You picks from the sites the AI found for your topics, grouped by story with its full coverage, never from the ones you follow", async () => {
   const env = pooled();
   const now = Date.now();
   sites(now, followed(now));
@@ -77,6 +77,9 @@ test("For You picks from the sites the AI found for your topics, grouped by stor
   assert.equal(story.opened, false);
   assert.equal(items[0].title, PEDRI);
   assert.ok(items.indexOf(story) === 1);
+  const coverage = (await api(worker, env, "/api/feed", { tab: "story", id: story.story })).json.items;
+  assert.deepEqual(coverage.map((item) => [item.source, item.story]), [["Gazzetta", story.story], ["Sport24", story.story]]);
+  assert.deepEqual((await api(worker, env, "/api/feed", { tab: "story", id: "missing" })).json.items, []);
   assert.deepEqual((await api(worker, env, "/api/feed", { tab: "sources" })).json.items, []);
   await api(worker, env, "/api/sources", { action: "add", url: "followed.example" });
   assert.ok(!(await forYou(env)).some((item) => item.source === "Followed"));
@@ -285,7 +288,7 @@ test("a source is found from its site, listed newest first and can be renamed, o
   await api(worker, env, "/api/sources", { action: "rename", id: blog.id, title: "Blog" });
   const ordered = await api(worker, env, "/api/sources", { action: "order", ids: [second.id, blog.id] });
   assert.deepEqual(ordered.json.sources.map((source) => source.title), ["Second", "Blog"]);
-  feed = (await api(worker, env, "/api/feed", { tab: "sources", source: blog.id })).json.items;
+  feed = (await api(worker, env, "/api/feed", { tab: "sources", id: blog.id })).json.items;
   assert.deepEqual(feed.map((item) => [item.title, item.source]), [["New", "Blog"], ["Old", "Blog"]]);
   assert.equal(rows(env, "SELECT etag FROM feeds WHERE owner = ?", blog.id)[0].etag, '"v1"');
   assert.ok(feed.every((item) => item.image === null));

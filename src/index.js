@@ -1,6 +1,6 @@
 import { checkAccess } from "./access.js";
 import { parseFeed, download, discover, looksLikeFeed, siteIcon, pageImage } from "./feeds.js";
-import { quantize, encodeVector, decodeVector, encodeProfile, decodeProfile, learn, affinity, tokens, sameStory } from "./rank.js";
+import { quantize, encodeVector, decodeVector, encodeProfile, decodeProfile, learn, affinity, tokens, grouper } from "./rank.js";
 import { createKey, publicKey, pushEndpoint, keyLength, sendPush } from "./push.js";
 
 const EMBED_MODEL = "@cf/baai/bge-m3";
@@ -281,6 +281,7 @@ async function sourcesRoute(request, env, ctx) {
 
 const item = (row) => ({
   id: row.id,
+  story: row.story,
   title: row.title,
   url: row.url,
   source: row.source,
@@ -335,16 +336,24 @@ async function feedRoute(request, env) {
   const now = Date.now();
   if (body.tab === "saved") {
     const rows = await env.DB.prepare(
-      "SELECT a.id, a.title, a.url, COALESCE(s.title, a.source) AS source, s.icon, a.published_at, a.opened_at, a.saved_at, a.image FROM articles a LEFT JOIN sources s ON s.id = a.owner WHERE a.saved_at IS NOT NULL ORDER BY a.saved_at DESC"
+      "SELECT a.id, a.story, a.title, a.url, COALESCE(s.title, a.source) AS source, s.icon, a.published_at, a.opened_at, a.saved_at, a.image FROM articles a LEFT JOIN sources s ON s.id = a.owner WHERE a.saved_at IS NOT NULL ORDER BY a.saved_at DESC"
     ).all();
     return json({ items: rows.results.map(item) });
   }
+  if (body.tab === "story") {
+    const rows = await env.DB.prepare(
+      "SELECT a.id, a.story, a.title, a.url, s.title AS source, s.icon, a.published_at, a.opened_at, a.saved_at, a.image FROM articles a JOIN sources s ON s.id = a.owner WHERE a.story = ?1 ORDER BY a.published_at DESC, a.id DESC"
+    )
+      .bind(typeof body.id === "string" ? body.id : "")
+      .all();
+    return json({ items: rows.results.map(item) });
+  }
   if (body.tab === "sources") {
-    const owner = typeof body.source === "string" && body.source ? body.source : null;
+    const owner = typeof body.id === "string" && body.id ? body.id : null;
     const before = body.before && Number.isFinite(body.before.at) && typeof body.before.id === "string" ? body.before : null;
     const params = [SOURCES_LIMIT, ...(owner ? [owner] : []), ...(before ? [before.at, before.id] : [])];
     const rows = await env.DB.prepare(
-      `SELECT a.id, a.title, a.url, s.title AS source, s.icon, a.published_at, a.opened_at, a.saved_at, a.image FROM articles a JOIN sources s ON s.id = a.owner WHERE a.owner IN (SELECT id FROM sources WHERE hidden = 0${owner ? " AND id = ?2" : ""})${before ? ` AND (a.published_at, a.id) < (?${params.length - 1}, ?${params.length})` : ""} ORDER BY a.published_at DESC, a.id DESC LIMIT ?1`
+      `SELECT a.id, a.story, a.title, a.url, s.title AS source, s.icon, a.published_at, a.opened_at, a.saved_at, a.image FROM articles a JOIN sources s ON s.id = a.owner WHERE a.owner IN (SELECT id FROM sources WHERE hidden = 0${owner ? " AND id = ?2" : ""})${before ? ` AND (a.published_at, a.id) < (?${params.length - 1}, ?${params.length})` : ""} ORDER BY a.published_at DESC, a.id DESC LIMIT ?1`
     )
       .bind(...params)
       .all();
@@ -367,7 +376,7 @@ async function feedRoute(request, env) {
     .sort((a, b) => b.published_at - a.published_at);
   const picked = pick(rows, now);
   if (picked.length === 0) return json({ items: [] });
-  const leads = await env.DB.prepare(`SELECT a.id, a.title, a.url, s.title AS source, s.icon, a.image FROM articles a JOIN sources s ON s.id = a.owner WHERE a.id IN (${slots(picked.length)})`)
+  const leads = await env.DB.prepare(`SELECT a.id, a.story, a.title, a.url, s.title AS source, s.icon, a.image FROM articles a JOIN sources s ON s.id = a.owner WHERE a.id IN (${slots(picked.length)})`)
     .bind(...picked.map((row) => row.id))
     .all();
   const shown = new Map(leads.results.map((row) => [row.id, row]));
@@ -493,17 +502,16 @@ async function enrich(env, now, list) {
   const [vectors, taste, recent] = await Promise.all([
     embed(env, list.map((entry) => entry.title)),
     interests(env),
-    env.DB.prepare("SELECT story, tokens FROM articles WHERE tokens != '' AND published_at > ?1 ORDER BY published_at DESC LIMIT ?2").bind(now - WINDOW_MS, STORY_SCAN).all()
+    env.DB.prepare("SELECT story, vector FROM articles WHERE vector IS NOT NULL AND published_at > ?1 ORDER BY published_at DESC LIMIT ?2").bind(now - WINDOW_MS, STORY_SCAN).all()
   ]);
   if (vectors.length !== list.length) return null;
-  const window = recent.results.map((row) => ({ story: row.story, words: row.tokens.split(" ") }));
-  return list.map((entry, index) => {
-    const words = tokens(entry.title);
-    const match = window.find((other) => sameStory(words, other.words));
-    const story = match ? match.story : entry.id;
-    window.unshift({ story, words });
-    return { story, words: words.join(" "), vector: encodeVector(vectors[index]), affinity: affinity(vectors[index], taste.profile, taste.topics) };
-  });
+  const group = grouper(recent.results.map((row) => ({ story: row.story, vector: decodeVector(row.vector) })));
+  return list.map((entry, index) => ({
+    story: group(entry.id, vectors[index]),
+    words: tokens(entry.title).join(" "),
+    vector: encodeVector(vectors[index]),
+    affinity: affinity(vectors[index], taste.profile, taste.topics)
+  }));
 }
 
 async function ingest(env, now, additions) {

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { quantize, encodeVector, decodeVector, encodeProfile, decodeProfile, cosine, learn, affinity, tokens, sameStory } from "../src/rank.js";
+import { quantize, encodeVector, decodeVector, encodeProfile, decodeProfile, cosine, learn, affinity, tokens, grouper } from "../src/rank.js";
 
 const unit = (index, size = 8) => Array.from({ length: size }, (_, position) => (position === index ? 1 : 0));
 
@@ -32,14 +32,13 @@ test("tokens fold accents and final sigma, skip filler words and keep stems", ()
   assert.deepEqual(tokens("Barcelona thrash Galatasaray: the video"), ["barcel", "thrash", "galata"]);
 });
 
-test("headlines are one story only on words beyond the topic itself", () => {
-  const ignore = new Set(tokens("Μπαρτσελόνα"));
-  const a = tokens("Γαλατάσαραϊ - Μπαρτσελόνα 1-4: Ο Λεβαντόφσκι διέλυσε τη Γαλατάσαραϊ");
-  const b = tokens("Λεβαντόφσκι και Γιαμάλ διέλυσαν τη Γαλατάσαραϊ");
-  const c = tokens("Μπαρτσελόνα: Ανανέωση συμβολαίου για τον Πέδρι");
-  const d = tokens("Μπαρτσελόνα: Ο Πέδρι στο Μπαρτσελόνα TV");
-  assert.equal(sameStory(a, b, ignore), true);
-  assert.equal(sameStory(a, c, ignore), false);
-  assert.equal(sameStory(c, d, ignore), false);
-  assert.equal(sameStory(c, d), true);
+test("an article joins the story closest to it in meaning, or starts its own when none is close enough", () => {
+  const group = grouper([
+    { story: "a", vector: quantize([1, 0, 0]) },
+    { story: "b", vector: quantize([0, 1, 0]) }
+  ]);
+  assert.equal(group("n1", quantize([1, 0.4, 0])), "a");
+  assert.equal(group("n2", quantize([0.6, 1, 0])), "b");
+  assert.equal(group("n3", quantize([1, 0, 1])), "n3");
+  assert.equal(group("n4", quantize([0.9, 0, 1])), "n3");
 });

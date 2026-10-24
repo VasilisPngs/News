@@ -617,10 +617,19 @@ label.list-item {
   min-width: 0;
 }
 
-.article-meta > span {
+.byline {
+  display: flex;
+  min-width: 0;
+  white-space: pre;
+}
+
+.byline > :first-child {
   overflow: hidden;
-  white-space: nowrap;
   text-overflow: ellipsis;
+}
+
+.byline > :last-child {
+  flex: none;
 }
 
 .source-icon {

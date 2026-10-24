@@ -1,6 +1,5 @@
 const DECAY = 0.97;
-const STORY_SHARED = 2;
-const STORY_OVERLAP = 0.5;
+const SAME_STORY = 0.75;
 const STOP = new Set(
   "και του της των τον την στο στη στην στον στα στις στους από για με που ένα μια μία ειδήσεις νέα μετά πριν είναι θα δεν ότι πως όπως αυτό αυτή ποιος ποια ποιο έχει έχουν ήταν the and for with from that this into over after about what when where how are was were has have will its new news says said video photos live update"
     .split(" ")
@@ -76,12 +75,32 @@ export function tokens(title) {
   return [...new Set(words)].slice(0, 16);
 }
 
-export function sameStory(left, right, ignore = new Set()) {
-  const a = left.filter((word) => !ignore.has(word));
-  const b = right.filter((word) => !ignore.has(word));
-  if (a.length === 0 || b.length === 0) return false;
-  const known = new Set(a);
-  let shared = 0;
-  for (const word of b) if (known.has(word)) shared += 1;
-  return shared >= STORY_SHARED && shared / Math.min(a.length, b.length) >= STORY_OVERLAP;
+function magnitude(vector) {
+  let sum = 0;
+  for (let index = 0; index < vector.length; index += 1) sum += vector[index] * vector[index];
+  return Math.sqrt(sum);
+}
+
+function dot(a, b) {
+  let sum = 0;
+  for (let index = 0; index < a.length; index += 1) sum = (sum + a[index] * b[index]) | 0;
+  return sum;
+}
+
+export function grouper(recent) {
+  const members = recent.map(({ story, vector }) => ({ story, vector, length: magnitude(vector) }));
+  return (id, vector) => {
+    const length = magnitude(vector);
+    let story = id;
+    let closest = SAME_STORY;
+    for (const member of members) {
+      const similarity = dot(vector, member.vector) / (length * member.length);
+      if (similarity >= closest) {
+        closest = similarity;
+        story = member.story;
+      }
+    }
+    members.push({ story, vector, length });
+    return story;
+  };
 }

@@ -2,6 +2,7 @@ import { glide } from "./dom.js";
 
 const ROUTES = [
   ["/", "foryou", "/"],
+  ["/story/:id", "story", "/"],
   ["/following", "sources", "/following"],
   ["/saved", "saved", "/saved"],
   ["/settings", "settings", "/settings"],
