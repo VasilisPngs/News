@@ -9,5 +9,10 @@
   },
   "devDependencies": {
     "wrangler": "4.152.0"
+  },
+  "packageManager": "npm@12.2.1",
+  "allowScripts": {
+    "esbuild": false,
+    "workerd": false
   }
 }
