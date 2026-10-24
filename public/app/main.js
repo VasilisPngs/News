@@ -108,7 +108,7 @@ function paintBanner() {
       el("span", { text: t("sessionExpired") }),
       el("button", { class: "btn text", type: "button", text: t("statusSignIn"), onclick: () => (location.href = `/?signin=${Date.now()}`) })
     ]);
-    document.body.append(banner);
+    view.before(banner);
   }
   if (!auth && banner) {
     banner.remove();

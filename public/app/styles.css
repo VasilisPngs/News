@@ -1218,17 +1218,12 @@ html.locked {
 }
 
 .banner {
-  position: fixed;
-  top: calc(var(--topbar) + 8px);
-  left: calc(var(--rail) + var(--margin));
-  right: var(--margin);
-  z-index: 25;
-  max-width: 600px;
-  margin-inline: auto;
+  flex: none;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  margin: calc(var(--topbar) + 8px) max(var(--margin), env(safe-area-inset-right), calc((100% - var(--rail) - var(--column)) / 2)) 0 calc(var(--rail) + max(var(--margin), env(safe-area-inset-left), calc((100% - var(--rail) - var(--column)) / 2)));
   padding: 8px 8px 8px 16px;
   border-radius: 16px;
   background: var(--md-error-container);
@@ -1239,6 +1234,14 @@ html.locked {
 
 .banner .btn.text {
   color: inherit;
+}
+
+.banner + .view {
+  padding-top: 24px;
+}
+
+:root:not(.scrolled) .view {
+  overflow-anchor: none;
 }
 
 :root:is([data-nav="push"], [data-nav="pop"]) .topbar {

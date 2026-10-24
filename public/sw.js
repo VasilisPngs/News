@@ -1,4 +1,4 @@
-const VERSION = "v41";
+const VERSION = "v42";
 const CACHE = `news-${VERSION}`;
 
 const SHELL = [
@@ -30,7 +30,10 @@ const SHELL = [
 
 self.addEventListener("install", (event) => {
   self.skipWaiting();
-  event.addRoutes({ condition: { urlPattern: "/api/*" }, source: "network" });
+  event.addRoutes([
+    { condition: { urlPattern: "/api/*" }, source: "network" },
+    { condition: { urlPattern: "/cdn-cgi/*" }, source: "network" }
+  ]);
   event.waitUntil(
     caches.open(CACHE).then((cache) => cache.addAll(SHELL.map((path) => new Request(path, { cache: "reload" }))))
   );
