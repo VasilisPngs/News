@@ -535,6 +535,19 @@ test("the hourly cron runs refresh, notify, backfill, rescore and prune without 
   assert.equal(rows(env, "SELECT COUNT(*) AS n FROM articles")[0].n, 6);
 });
 
+test("refuses changes sent from another site", async () => {
+  const env = environment();
+  network([]);
+  const send = async (site) => {
+    const ctx = context();
+    const response = await worker.fetch(new Request("https://localhost/api/state", { method: "POST", headers: { "content-type": "application/json", "sec-fetch-site": site }, body: "{}" }), env, ctx);
+    await ctx.settle();
+    return response.status;
+  };
+  assert.equal(await send("cross-site"), 403);
+  assert.equal(await send("same-origin"), 200);
+});
+
 test("sends a finished sign-in back to the app", async () => {
   const signin = await worker.fetch(new Request("https://localhost/api/signin"), environment(), context());
   assert.equal(signin.status, 302);

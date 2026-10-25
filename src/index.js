@@ -737,6 +737,8 @@ export default {
     const route = ROUTES[url.pathname];
     if (!route) return json({ error: "not_found" }, 404);
     if (request.method !== "POST") return json({ error: "method_not_allowed" }, 405);
+    const site = request.headers.get("sec-fetch-site");
+    if (site && site !== "same-origin") return json({ error: "cross_site" }, 403);
     const access = await checkAccess(request, url, env);
     if (access === "unavailable") return json({ error: "access_unavailable" }, 503);
     if (access !== "ok") return json({ error: "forbidden" }, 403);
