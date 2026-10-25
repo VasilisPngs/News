@@ -169,8 +169,8 @@ export async function suggestNext(env, now) {
   return topic ? suggest(env, topic, now) : 0;
 }
 
-export async function tryCandidates(env, limit = POOL_PER_RUN) {
-  const rows = (await env.DB.prepare("SELECT topic, domain FROM candidates WHERE tried = 0 ORDER BY rowid LIMIT ?1").bind(limit).all()).results;
+export async function tryCandidates(env) {
+  const rows = (await env.DB.prepare("SELECT topic, domain FROM candidates WHERE tried = 0 ORDER BY rowid LIMIT ?1").bind(POOL_PER_RUN).all()).results;
   const added = [];
   for (const row of rows) {
     const found = await discover(row.domain).catch(() => null);
@@ -532,8 +532,8 @@ async function ingest(env, now, additions) {
   return touched;
 }
 
-export async function backfill(env, now, limit = EMBED_BATCH) {
-  const rows = (await env.DB.prepare("SELECT id, title FROM articles WHERE vector IS NULL AND published_at > ?1 ORDER BY published_at DESC LIMIT ?2").bind(now - WINDOW_MS, limit).all()).results;
+export async function backfill(env, now) {
+  const rows = (await env.DB.prepare("SELECT id, title FROM articles WHERE vector IS NULL AND published_at > ?1 ORDER BY published_at DESC LIMIT ?2").bind(now - WINDOW_MS, EMBED_BATCH).all()).results;
   if (rows.length === 0) return 0;
   const scored = await enrich(env, now, rows);
   if (!scored) return 0;
@@ -545,23 +545,23 @@ export async function backfill(env, now, limit = EMBED_BATCH) {
   return rows.length;
 }
 
-export async function posters(env, now, limit = POSTERS_PER_RUN) {
-  const rows = (await env.DB.prepare("SELECT id, url FROM articles WHERE image IS NULL AND seen_at > ?1 ORDER BY published_at DESC LIMIT ?2").bind(now - RETENTION_MS, limit).all()).results;
+export async function posters(env, now) {
+  const rows = (await env.DB.prepare("SELECT id, url FROM articles WHERE image IS NULL AND seen_at > ?1 ORDER BY published_at DESC LIMIT ?2").bind(now - RETENTION_MS, POSTERS_PER_RUN).all()).results;
   const found = await Promise.all(rows.map((row) => pageImage(row.url)));
   if (rows.length) await env.DB.batch(rows.map((row, index) => env.DB.prepare("UPDATE articles SET image = ?2 WHERE id = ?1 AND image IS NULL").bind(row.id, found[index])));
   return rows.length;
 }
 
-export async function icons(env, limit = 2) {
-  const rows = (await env.DB.prepare("SELECT id, site FROM sources WHERE icon IS NULL LIMIT ?1").bind(limit).all()).results;
+export async function icons(env) {
+  const rows = (await env.DB.prepare("SELECT id, site FROM sources WHERE icon IS NULL LIMIT 2").all()).results;
   for (const row of rows) await env.DB.prepare("UPDATE sources SET icon = ?2 WHERE id = ?1").bind(row.id, await siteIcon(row.site)).run();
   return rows.length;
 }
 
-async function rescore(env, now, limit = RESCORE_LIMIT) {
+async function rescore(env, now) {
   const [taste, rows] = await Promise.all([
     interests(env),
-    env.DB.prepare("SELECT id, vector, affinity FROM articles WHERE vector IS NOT NULL AND published_at > ?1 ORDER BY published_at DESC LIMIT ?2").bind(now - WINDOW_MS, limit).all()
+    env.DB.prepare("SELECT id, vector, affinity FROM articles WHERE vector IS NOT NULL AND published_at > ?1 ORDER BY published_at DESC LIMIT ?2").bind(now - WINDOW_MS, RESCORE_LIMIT).all()
   ]);
   const updates = [];
   for (const row of rows.results) {
@@ -588,14 +588,14 @@ function conditional(feed) {
   return headers;
 }
 
-export async function refresh(env, now, { owner = null, limit = FEEDS_PER_RUN, hidden = null } = {}) {
+export async function refresh(env, now, { owner = null, hidden = null } = {}) {
   const due = owner
     ? await env.DB.prepare("SELECT * FROM feeds WHERE owner = ?1").bind(owner).all()
     : hidden !== null
       ? await env.DB.prepare("SELECT f.* FROM feeds f JOIN sources s ON s.id = f.owner WHERE s.hidden = ?1 AND f.failures = 0 AND f.fetched_at <= ?2 ORDER BY f.fetched_at LIMIT ?3")
-          .bind(hidden, now - PULL_STALE_MS, limit)
+          .bind(hidden, now - PULL_STALE_MS, FEEDS_PER_RUN)
           .all()
-      : await env.DB.prepare("SELECT * FROM feeds WHERE fetched_at + ?2 * (1 << MIN(failures, ?3)) <= ?1 ORDER BY fetched_at LIMIT ?4").bind(now, FEED_INTERVAL_MS, MAX_BACKOFF, limit).all();
+      : await env.DB.prepare("SELECT * FROM feeds WHERE fetched_at + ?2 * (1 << MIN(failures, ?3)) <= ?1 ORDER BY fetched_at LIMIT ?4").bind(now, FEED_INTERVAL_MS, MAX_BACKOFF, FEEDS_PER_RUN).all();
   const feeds = due.results;
   if (feeds.length === 0) return { added: 0, touched: new Set() };
   const pages = await Promise.all(feeds.map((feed) => download(feed.url, conditional(feed)).catch((error) => ({ status: 0, text: "", error: String(error && error.message) }))));

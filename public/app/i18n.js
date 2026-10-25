@@ -120,10 +120,9 @@ const isOne = (count) => formatter(Intl.PluralRules).select(count) === "one";
 
 export const tn = (count, key) => `${formatter(Intl.NumberFormat).format(count)} ${PLURALS[key][isOne(count) ? 0 : 1]}`;
 
-export function dayStart(time, offset = 0) {
+export function dayStart(time) {
   const day = new Date(time);
   day.setHours(0, 0, 0, 0);
-  day.setDate(day.getDate() + offset);
   return day.getTime();
 }
 

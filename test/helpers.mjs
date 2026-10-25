@@ -89,8 +89,9 @@ export function network(routes) {
   return calls;
 }
 
-export async function api(worker, env, path, body, { ctx = context(), host = "localhost", method = "POST", headers = {} } = {}) {
-  const init = { method, headers: { "content-type": "application/json", ...headers } };
+export async function api(worker, env, path, body, { host = "localhost", method = "POST" } = {}) {
+  const ctx = context();
+  const init = { method, headers: { "content-type": "application/json" } };
   if (body !== undefined) init.body = JSON.stringify(body);
   const response = await worker.fetch(new Request(`https://${host}${path}`, init), env, ctx);
   await ctx.settle();
