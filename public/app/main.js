@@ -104,7 +104,7 @@ function paintBanner() {
   if (auth && !banner) {
     banner = el("div", { class: "banner", role: "alert" }, [
       el("span", { text: t("sessionExpired") }),
-      el("button", { class: "btn text", type: "button", text: t("statusSignIn"), onclick: () => (location.href = `/?signin=${Date.now()}`) })
+      el("button", { class: "btn text", type: "button", text: t("statusSignIn"), onclick: () => (location.href = "/api/signin") })
     ]);
     view.before(banner);
   }

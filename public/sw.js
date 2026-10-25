@@ -1,4 +1,4 @@
-const VERSION = "v44";
+const VERSION = "v45";
 const CACHE = `news-${VERSION}`;
 
 const SHELL = [
@@ -63,7 +63,6 @@ self.addEventListener("fetch", (event) => {
   if (request.method !== "GET") return;
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
-  if (url.searchParams.has("signin")) return;
   event.respondWith(shellFirst(request, request.mode === "navigate" ? "/" : request));
 });
 

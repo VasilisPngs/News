@@ -535,6 +535,12 @@ test("the hourly cron runs refresh, notify, backfill, rescore and prune without 
   assert.equal(rows(env, "SELECT COUNT(*) AS n FROM articles")[0].n, 6);
 });
 
+test("sends a finished sign-in back to the app", async () => {
+  const signin = await worker.fetch(new Request("https://localhost/api/signin"), environment(), context());
+  assert.equal(signin.status, 302);
+  assert.equal(signin.headers.get("location"), "https://localhost/");
+});
+
 test("requests need a valid Access session away from localhost", async () => {
   const env = environment();
   network([]);
