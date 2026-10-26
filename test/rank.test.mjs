@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { quantize, encodeVector, decodeVector, encodeProfile, decodeProfile, cosine, learn, affinity, tokens, grouper } from "../src/rank.js";
+import { quantize, encodeVector, decodeVector, encodeProfile, decodeProfile, learn, affinity, tokens, grouper } from "../src/rank.js";
+import { cosine } from "./helpers.mjs";
 
 const unit = (index, size = 8) => Array.from({ length: size }, (_, position) => (position === index ? 1 : 0));
 
@@ -12,7 +13,7 @@ test("vectors survive the text round trip and keep their direction", () => {
   const profile = new Float32Array([0.1, -0.2, 0.3]);
   assert.deepEqual([...decodeProfile(encodeProfile(profile))], [...profile]);
   assert.equal(decodeVector(null), null);
-  assert.equal(cosine(new Int8Array(3), new Int8Array(3)), 0);
+  assert.equal(affinity(new Int8Array(3), new Float32Array(3), [new Int8Array(3)]), 0);
 });
 
 test("learning pulls the profile toward opened articles and away from hidden ones", () => {

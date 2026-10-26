@@ -60,8 +60,6 @@ function similarity(a, left, b, right) {
   return dot / Math.sqrt(left * right);
 }
 
-export const cosine = (a, b) => (a && b ? similarity(a, squares(a), b, squares(b)) : 0);
-
 export function learn(profile, vector, weight) {
   let norm = 0;
   for (const value of vector) norm += value * value;

@@ -1,8 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import worker, { refresh, notify, prune, backfill, pick, icons, posters, domains, suggestNext, tryCandidates } from "../src/index.js";
-import { environment, network, api, rss, context, device, decrypt, ai } from "./helpers.mjs";
-import { decodeProfile, decodeVector, cosine } from "../src/rank.js";
+import { environment, network, api, rss, context, device, decrypt, ai, cosine } from "./helpers.mjs";
+import { decodeProfile, decodeVector } from "../src/rank.js";
 
 const HOUR = 3600000;
 
