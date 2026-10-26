@@ -329,7 +329,47 @@ test("source articles carry their picture, and older ones get it filled in on th
   assert.equal((await api(worker, env, "/api/feed", { tab: "sources" })).json.items[0].image, null);
   withImages = true;
   await refresh(env, now + 21 * 60000);
-  assert.equal((await api(worker, env, "/api/feed", { tab: "sources" })).json.items[0].image, "https://pics.example/1.jpg");
+  const [article] = (await api(worker, env, "/api/feed", { tab: "sources" })).json.items;
+  assert.equal(article.image, `/api/image/${article.id}`);
+  assert.equal(rows(env, "SELECT image FROM articles")[0].image, "https://pics.example/1.jpg");
+});
+
+test("serves an article's picture as a 240 px square resized by Cloudflare, and the original when resizing fails", async () => {
+  const env = environment();
+  const now = Date.now();
+  network([
+    [
+      "https://pics.example/",
+      () => new Response(`<rss><channel><title>Pics</title><item><title>One</title><link>https://pics.example/1</link><pubDate>${new Date(now - HOUR).toUTCString()}</pubDate><enclosure url="https://pics.example/1.jpg" type="image/jpeg"/></item></channel></rss>`)
+    ]
+  ]);
+  await api(worker, env, "/api/sources", { action: "add", url: "pics.example" });
+  const [article] = (await api(worker, env, "/api/feed", { tab: "sources" })).json.items;
+  const asked = [];
+  let resized = "internal=ok/- q=0 n=12";
+  globalThis.fetch = async (input, init) => {
+    asked.push({ url: String(input), image: init.cf.image });
+    return new Response("small", { headers: { "content-type": "image/avif", ...(resized && { "cf-resized": resized }) } });
+  };
+  const picture = (accept, method = "GET") => worker.fetch(new Request(`https://localhost${article.image}`, { method, headers: { accept } }), env, context());
+  const served = await picture("image/avif,image/webp,*/*");
+  assert.equal(served.status, 200);
+  assert.equal(await served.text(), "small");
+  assert.equal(served.headers.get("content-type"), "image/avif");
+  assert.equal(served.headers.get("cache-control"), "private, max-age=1209600, immutable");
+  assert.deepEqual(asked[0], { url: "https://pics.example/1.jpg", image: { width: 240, height: 240, fit: "cover", format: "avif" } });
+  await picture("image/webp,*/*");
+  assert.equal(asked[1].image.format, "webp");
+  await picture("*/*");
+  assert.equal(asked[2].image.format, undefined);
+  for (const outcome of ["err=9422", null]) {
+    resized = outcome;
+    const fallback = await picture("image/avif");
+    assert.equal(fallback.status, 302);
+    assert.equal(fallback.headers.get("location"), "https://pics.example/1.jpg");
+  }
+  assert.equal((await picture("image/avif", "POST")).status, 405);
+  assert.equal((await worker.fetch(new Request(`https://localhost/api/image/${"0".repeat(32)}`), env, context())).status, 404);
 });
 
 test("articles show their source's icon, found when the source is added or filled in by the cron", async () => {
@@ -368,7 +408,7 @@ test("an article whose feed has no picture takes its page's share picture, once"
   const images = () => Object.fromEntries(rows(env, "SELECT title, image FROM articles").map((row) => [row.title, row.image]));
   assert.deepEqual(images(), { "Story 1": "https://plain.example/1.png", "Story 2": "" });
   const items = (await api(worker, env, "/api/feed", { tab: "sources" })).json.items;
-  assert.deepEqual(items.map((entry) => entry.image), ["https://plain.example/1.png", null]);
+  assert.deepEqual(items.map((entry) => entry.image), [`/api/image/${items[0].id}`, null]);
   const pages = calls.filter((request) => /\/[12]$/.test(request.url)).length;
   assert.equal(await posters(env, now), 0);
   assert.equal(calls.filter((request) => /\/[12]$/.test(request.url)).length, pages);

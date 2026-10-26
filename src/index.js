@@ -41,6 +41,8 @@ const MAX_PARAMS = 90;
 const WEIGHTS = { open: 0.5, read: 1.5, bounce: -1, save: 1, less: -1.5 };
 const BOUNCE_SECONDS = 10;
 const READ_SECONDS = 60;
+const THUMBNAIL = 240;
+const PICTURE = /^\/api\/image\/([0-9a-f]{32})$/;
 
 const json = (body, status = 200) => Response.json(body, { status, headers: { "cache-control": "no-store" } });
 
@@ -288,7 +290,7 @@ const item = (row) => ({
   opened: Boolean(row.opened_at),
   saved: Boolean(row.saved_at),
   coverage: row.coverage || 1,
-  image: row.image || null,
+  image: row.image ? `/api/image/${row.id}` : null,
   icon: row.icon || null
 });
 
@@ -425,6 +427,22 @@ async function refreshRoute(request, env) {
   const { added } = await refresh(env, now, { hidden: body.tab === "foryou" ? 1 : 0 });
   await posters(env, now);
   return json({ added });
+}
+
+async function imageRoute(request, env) {
+  const [, id] = new URL(request.url).pathname.match(PICTURE);
+  const source = await env.DB.prepare("SELECT image FROM articles WHERE id = ?1").bind(id).first("image");
+  if (!source) return json({ error: "not_found" }, 404);
+  const accept = request.headers.get("accept") || "";
+  const format = /image\/avif/.test(accept) ? "avif" : /image\/webp/.test(accept) ? "webp" : null;
+  const resized = await fetch(source, { cf: { image: { width: THUMBNAIL, height: THUMBNAIL, fit: "cover", ...(format && { format }) } } }).catch(() => null);
+  const outcome = resized && resized.headers.get("cf-resized");
+  if (resized && resized.ok && outcome && !outcome.includes("err=")) {
+    return new Response(resized.body, { headers: { "content-type": resized.headers.get("content-type"), "cache-control": `private, max-age=${RETENTION_MS / 1000}, immutable`, vary: "accept" } });
+  }
+  await resized?.body?.cancel();
+  console.error(JSON.stringify({ thumbnail_failed: outcome || resized?.status || "unreachable" }));
+  return Response.redirect(source, 302);
 }
 
 async function pushRoute(request, env) {
@@ -733,9 +751,10 @@ export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
     if (url.pathname === "/api/signin") return Response.redirect(new URL("/", url));
-    const route = ROUTES[url.pathname];
+    const picture = PICTURE.test(url.pathname);
+    const route = picture ? imageRoute : ROUTES[url.pathname];
     if (!route) return json({ error: "not_found" }, 404);
-    if (request.method !== "POST") return json({ error: "method_not_allowed" }, 405);
+    if (request.method !== (picture ? "GET" : "POST")) return json({ error: "method_not_allowed" }, 405);
     const site = request.headers.get("sec-fetch-site");
     if (site && site !== "same-origin") return json({ error: "cross_site" }, 403);
     const access = await checkAccess(request, url, env);
