@@ -442,7 +442,7 @@ async function imageRoute(request, env) {
   }
   await resized?.body?.cancel();
   console.error(JSON.stringify({ thumbnail_failed: outcome || resized?.status || "unreachable" }));
-  return Response.redirect(source, 302);
+  return new Response(null, { status: 302, headers: { location: source, "cache-control": "private, max-age=86400" } });
 }
 
 async function pushRoute(request, env) {

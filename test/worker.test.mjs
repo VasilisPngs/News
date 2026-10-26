@@ -367,6 +367,7 @@ test("serves an article's picture as a 240 px square resized by Cloudflare, and 
     const fallback = await picture("image/avif");
     assert.equal(fallback.status, 302);
     assert.equal(fallback.headers.get("location"), "https://pics.example/1.jpg");
+    assert.equal(fallback.headers.get("cache-control"), "private, max-age=86400");
   }
   assert.equal((await picture("image/avif", "POST")).status, 405);
   assert.equal((await worker.fetch(new Request(`https://localhost/api/image/${"0".repeat(32)}`), env, context())).status, 404);
