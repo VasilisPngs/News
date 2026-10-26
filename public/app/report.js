@@ -30,7 +30,8 @@ addEventListener(
     const target = event.target;
     if (target && target !== globalThis && target.tagName) {
       const source = target.currentSrc || target.src || target.href || "";
-      if (source && new URL(source, location.href).origin !== location.origin) return;
+      const url = source && new URL(source, location.href);
+      if (url && (url.origin !== location.origin || url.pathname.startsWith("/api/image/"))) return;
       report("resource", `${target.tagName.toLowerCase()} failed to load`, source);
       return;
     }
