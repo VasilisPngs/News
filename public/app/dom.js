@@ -353,16 +353,14 @@ export function swipeAction(content, symbol, onAction) {
   };
   const dismiss = async () => {
     move(-wrap.offsetWidth, true);
-    const collapse = wrap.animate([{ height: `${wrap.offsetHeight}px`, opacity: 1 }, { height: "0px", opacity: 0 }], {
-      duration: 300,
-      delay: 120,
-      easing: "cubic-bezier(0.2, 0, 0, 1)",
-      fill: "forwards"
-    });
-    await collapse.finished;
+    const collapse = [
+      wrap.animate([{ height: `${wrap.offsetHeight}px` }, { height: "0px" }], { ...rootMotion("--md-default-spatial"), delay: 120, fill: "forwards" }),
+      wrap.animate([{ opacity: 1 }, { opacity: 0 }], { ...rootMotion("--md-default-effects"), delay: 120, fill: "forwards" })
+    ];
+    await Promise.all(collapse.map((animation) => animation.finished));
     wrap.classList.remove("swiping");
     if ((await onAction()) !== false) return;
-    collapse.cancel();
+    for (const animation of collapse) animation.cancel();
     wrap.classList.add("swiping");
     move(0, true);
   };
@@ -473,6 +471,11 @@ function unlockPage(app) {
 }
 
 const rootLength = (name) => parseFloat(getComputedStyle(document.documentElement).getPropertyValue(name)) || 0;
+
+const rootMotion = (name) => {
+  const [duration, easing] = getComputedStyle(document.documentElement).getPropertyValue(name).trim().split(/ (.+)/s);
+  return { duration: parseFloat(duration), easing };
+};
 
 function openDialog(build, onClose, role = null) {
   const host = document.getElementById("dialog-host");
