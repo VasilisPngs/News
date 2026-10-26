@@ -39,18 +39,28 @@ export const encodeProfile = (profile) => toBase64(profile);
 
 export const decodeProfile = (text) => (text ? new Float32Array(fromBase64(text).buffer) : null);
 
-export function cosine(a, b) {
-  if (!a || !b || a.length !== b.length) return 0;
-  let dot = 0;
-  let left = 0;
-  let right = 0;
-  for (let index = 0; index < a.length; index += 1) {
-    dot += a[index] * b[index];
-    left += a[index] * a[index];
-    right += b[index] * b[index];
-  }
-  return left && right ? dot / Math.sqrt(left * right) : 0;
+const norms = new WeakMap();
+
+function squares(vector) {
+  let sum = 0;
+  for (let index = 0; index < vector.length; index += 1) sum += vector[index] * vector[index];
+  return sum;
 }
+
+function cachedSquares(vector) {
+  let sum = norms.get(vector);
+  if (sum === undefined) norms.set(vector, (sum = squares(vector)));
+  return sum;
+}
+
+function similarity(a, left, b, right) {
+  if (!a || !b || a.length !== b.length || !left || !right) return 0;
+  let dot = 0;
+  for (let index = 0; index < a.length; index += 1) dot += a[index] * b[index];
+  return dot / Math.sqrt(left * right);
+}
+
+export const cosine = (a, b) => (a && b ? similarity(a, squares(a), b, squares(b)) : 0);
 
 export function learn(profile, vector, weight) {
   let norm = 0;
@@ -62,9 +72,10 @@ export function learn(profile, vector, weight) {
 }
 
 export function affinity(vector, profile, topics) {
+  const own = vector ? squares(vector) : 0;
   let topical = 0;
-  for (const topic of topics) topical = Math.max(topical, cosine(vector, topic));
-  return profile ? 0.5 * cosine(vector, profile) + 0.5 * topical : topical;
+  for (const topic of topics) topical = Math.max(topical, similarity(vector, own, topic, cachedSquares(topic)));
+  return profile ? 0.5 * similarity(vector, own, profile, cachedSquares(profile)) + 0.5 * topical : topical;
 }
 
 export function tokens(title) {

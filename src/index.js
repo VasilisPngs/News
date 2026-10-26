@@ -652,12 +652,11 @@ async function threshold(env, now) {
 
 export async function notify(env, now, touched) {
   if (touched.size === 0) return null;
-  const [subscriptions, sourceCount] = await Promise.all([
+  const [subscriptions, needed] = await Promise.all([
     env.DB.prepare("SELECT endpoint, p256dh, auth FROM subscriptions").all(),
-    env.DB.prepare("SELECT COUNT(*) AS n FROM sources").first("n")
+    env.DB.prepare("SELECT COUNT(*) AS n FROM (SELECT 1 FROM sources LIMIT ?1)").bind(NOTIFY_COVERAGE).first("n")
   ]);
-  if (subscriptions.results.length === 0 || sourceCount < NOTIFY_MIN_COVERAGE) return null;
-  const needed = Math.min(NOTIFY_COVERAGE, sourceCount);
+  if (subscriptions.results.length === 0 || needed < NOTIFY_MIN_COVERAGE) return null;
   const counter = `sent:${athensDay(now)}`;
   const sent = Number(await getMeta(env, counter)) || 0;
   if (sent >= NOTIFY_DAILY) return null;
@@ -757,11 +756,12 @@ export default {
         const { touched } = await refresh(env, now);
         await notify(env, now, touched);
         await backfill(env, now);
-        await icons(env);
         await posters(env, now);
         await suggestNext(env, now);
-        await tryCandidates(env);
-        if (new Date(now).getUTCMinutes() < 2) {
+        const pooled = await tryCandidates(env);
+        const hourly = new Date(now).getUTCMinutes() < 2;
+        if (pooled.length || hourly) await icons(env);
+        if (hourly) {
           await rescore(env, now);
           await prune(env, now);
         }
