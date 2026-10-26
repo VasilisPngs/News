@@ -141,8 +141,18 @@ export async function download(url, headers = {}) {
     await response.body?.cancel();
     return { status: response.status || 502, text: "", url: response.url || url };
   }
-  const text = (await response.text()).slice(0, MAX_BYTES);
+  const text = decode((await response.bytes()).subarray(0, MAX_BYTES), response.headers.get("content-type"));
   return { status: response.status, text, url: response.url || url, etag: response.headers.get("etag"), modified: response.headers.get("last-modified") };
+}
+
+function decode(bytes, type) {
+  const declared = new TextDecoder().decode(bytes.subarray(0, 1024)).match(/<\?xml[^>]*\bencoding\s*=\s*["']?([\w.:-]+)|<meta\b[^>]*\bcharset\s*=\s*["']?([\w.:-]+)/i);
+  const label = (type || "").match(/charset\s*=\s*["']?([\w.:-]+)/i)?.[1] || declared?.[1] || declared?.[2] || "utf-8";
+  try {
+    return new TextDecoder(label).decode(bytes);
+  } catch {
+    return new TextDecoder().decode(bytes);
+  }
 }
 
 const headOf = (html) => html.slice(0, Math.max(html.search(/<\/head>/i), 0) || 200000);

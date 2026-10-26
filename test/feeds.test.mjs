@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { parseFeed, looksLikeFeed, normalizeSite, discover, siteIcon, pageImage } from "../src/feeds.js";
+import { parseFeed, looksLikeFeed, normalizeSite, discover, download, siteIcon, pageImage } from "../src/feeds.js";
 import { network, rss } from "./helpers.mjs";
 
 const NOW = Date.parse("2026-10-14T10:00:00Z");
@@ -85,6 +85,23 @@ test("feed detection and site addresses", () => {
   assert.equal(normalizeSite("http://blog.example/path"), "http://blog.example/path");
   assert.equal(normalizeSite("javascript:alert(1)"), "");
   assert.equal(normalizeSite(""), "");
+});
+
+test("a feed in a Greek legacy encoding is read in the charset it declares", async () => {
+  const legacy = (text) => Uint8Array.from(text, (char) => (char.charCodeAt(0) < 128 ? char.charCodeAt(0) : char.charCodeAt(0) - 0x2d0));
+  const title = "Νέα από την Αθήνα";
+  const xml = (prolog) => `${prolog}<rss version="2.0"><channel><title>Ειδήσεις</title><link>https://old.example/</link><item><title>${title}</title><link>https://old.example/a</link><pubDate>${new Date(NOW).toUTCString()}</pubDate></item></channel></rss>`;
+  network([
+    ["https://old.example/declared.xml", () => new Response(legacy(xml('<?xml version="1.0" encoding="windows-1253"?>')), { headers: { "content-type": "application/rss+xml" } })],
+    ["https://old.example/header.xml", () => new Response(legacy(xml("")), { headers: { "content-type": "text/xml; charset=ISO-8859-7" } })],
+    ["https://old.example/unknown.xml", () => new Response(new TextEncoder().encode(xml('<?xml version="1.0" encoding="x-unknown"?>')), { headers: { "content-type": "application/rss+xml" } })]
+  ]);
+  for (const url of ["https://old.example/declared.xml", "https://old.example/header.xml", "https://old.example/unknown.xml"]) {
+    const { text } = await download(url);
+    const feed = parseFeed(text, url, NOW);
+    assert.equal(feed.title, "Ειδήσεις", url);
+    assert.equal(feed.items[0].title, title, url);
+  }
 });
 
 test("a site address leads to the feed its page links to", async () => {
