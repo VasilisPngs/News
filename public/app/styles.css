@@ -62,6 +62,25 @@
   --column: 840px;
 }
 
+@media (prefers-contrast: more) {
+  :root {
+    --md-primary: light-dark(#2c426d, #b6c6ee);
+    --md-on-primary: light-dark(#cbdaff, #263656);
+    --md-primary-container: light-dark(#5f74a2, #657498);
+    --md-on-primary-container: light-dark(#ffffff, #ffffff);
+    --md-secondary: light-dark(#3b4355, #bfc6dc);
+    --md-secondary-container: light-dark(#6d7488, #6d7488);
+    --md-on-secondary-container: light-dark(#ffffff, #ffffff);
+    --md-error-container: light-dark(#c54d4a, #c54d4a);
+    --md-on-error-container: light-dark(#ffffff, #ffffff);
+    --md-on-surface: light-dark(#21242c, #ffffff);
+    --md-on-surface-variant: light-dark(#40434b, #b6b8c2);
+    --md-outline: light-dark(#5c5f68, #91939d);
+    --md-outline-variant: light-dark(#787a84, #73757e);
+    --md-inverse-on-surface: light-dark(#c5c4ca, #37383c);
+  }
+}
+
 :root[data-theme="light"] {
   color-scheme: light;
 }
