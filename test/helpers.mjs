@@ -73,7 +73,7 @@ export function ai({ sites = [] } = {}) {
 }
 
 export function environment(overrides = {}) {
-  return { DB: database(), AI: ai(), ACCESS_TEAM_DOMAIN: "team.example", ...overrides };
+  return { DB: database(), AI: ai(), ACCESS_TEAM_DOMAIN: "team.example", ACCESS_AUD: "aud-1", ...overrides };
 }
 
 export function network(routes) {
@@ -89,9 +89,9 @@ export function network(routes) {
   return calls;
 }
 
-export async function api(worker, env, path, body, { host = "localhost", method = "POST" } = {}) {
+export async function api(worker, env, path, body, { host = "localhost", method = "POST", headers = {} } = {}) {
   const ctx = context();
-  const init = { method, headers: { "content-type": "application/json" } };
+  const init = { method, headers: { "content-type": "application/json", ...headers } };
   if (body !== undefined) init.body = JSON.stringify(body);
   const response = await worker.fetch(new Request(`https://${host}${path}`, init), env, ctx);
   await ctx.settle();

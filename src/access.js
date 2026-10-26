@@ -70,7 +70,7 @@ export async function checkAccess(request, url, env) {
 
   const team = String(env.ACCESS_TEAM_DOMAIN || "").trim();
   const audience = String(env.ACCESS_AUD || "").trim();
-  if (!team) return "denied";
+  if (!team || !audience) return "denied";
 
   const token = readToken(request);
   if (!token) return "denied";
@@ -93,7 +93,7 @@ export async function checkAccess(request, url, env) {
   if (Number.isFinite(claims.iat) && claims.iat > seconds + CLOCK_SKEW_S) return "denied";
   if (claims.iss !== `https://${team}`) return "denied";
   const audiences = Array.isArray(claims.aud) ? claims.aud : [claims.aud];
-  if (audience ? !audiences.includes(audience) : !audiences.some((value) => typeof value === "string" && value)) return "denied";
+  if (!audiences.includes(audience)) return "denied";
 
   let keys;
   try {
