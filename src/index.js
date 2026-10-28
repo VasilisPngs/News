@@ -30,6 +30,8 @@ const SAME_WORDS = 0.12;
 const VARIETY_WINDOW = 6;
 const SOURCES_LIMIT = 120;
 const NOTIFY_DAILY = 3;
+const NOTIFY_FROM_MINUTE = 8 * 60;
+const NOTIFY_PART_MINUTES = (24 * 60 - NOTIFY_FROM_MINUTE) / NOTIFY_DAILY;
 const NOTIFY_COVERAGE = 4;
 const NOTIFY_MIN_COVERAGE = 2;
 const NOTIFY_SPAN_MS = 12 * 3600000;
@@ -53,6 +55,11 @@ const cleanName = (value) => String(value ?? "").replace(/\s+/g, " ").trim().sli
 const sameName = (a, b) => a.toLocaleLowerCase() === b.toLocaleLowerCase();
 
 const athensDay = (time) => new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Athens" }).format(time);
+
+function athensMinute(time) {
+  const [hour, minute] = new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/Athens", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(time).split(":").map(Number);
+  return hour * 60 + minute;
+}
 
 const slots = (count, from = 1) => Array.from({ length: count }, (_, index) => `?${index + from}`).join(", ");
 
@@ -669,15 +676,16 @@ async function threshold(env, now) {
 }
 
 export async function notify(env, now, touched) {
-  if (touched.size === 0) return null;
+  const part = Math.floor((athensMinute(now) - NOTIFY_FROM_MINUTE) / NOTIFY_PART_MINUTES);
+  if (touched.size === 0 || part < 0) return null;
   const [subscriptions, needed] = await Promise.all([
     env.DB.prepare("SELECT endpoint, p256dh, auth FROM subscriptions").all(),
     env.DB.prepare("SELECT COUNT(*) AS n FROM (SELECT 1 FROM sources LIMIT ?1)").bind(NOTIFY_COVERAGE).first("n")
   ]);
   if (subscriptions.results.length === 0 || needed < NOTIFY_MIN_COVERAGE) return null;
   const counter = `sent:${athensDay(now)}`;
-  const sent = Number(await getMeta(env, counter)) || 0;
-  if (sent >= NOTIFY_DAILY) return null;
+  const used = Number(await getMeta(env, counter)) || 0;
+  if (part < used) return null;
   const stories = [...touched].slice(0, MAX_PARAMS);
   const covered = await env.DB.prepare(
     `SELECT story, COUNT(DISTINCT owner) AS coverage FROM articles WHERE story IN (${slots(stories.length, 3)}) AND published_at > ?1 AND story NOT IN (SELECT story FROM articles WHERE notified_at IS NOT NULL) AND story NOT IN (SELECT story FROM articles WHERE hidden_at IS NOT NULL) GROUP BY story HAVING coverage >= ?2`
@@ -721,7 +729,7 @@ export async function notify(env, now, touched) {
   );
   await env.DB.batch([
     env.DB.prepare("UPDATE articles SET notified_at = ?2 WHERE story = ?1").bind(best.story, now),
-    setMeta(env, counter, sent + 1),
+    setMeta(env, counter, part + 1),
     ...gone.map((endpoint) => env.DB.prepare("DELETE FROM subscriptions WHERE endpoint = ?1").bind(endpoint))
   ]);
   return best.story;

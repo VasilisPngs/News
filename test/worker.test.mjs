@@ -5,6 +5,7 @@ import { environment, network, api, rss, context, device, decrypt, ai, cosine } 
 import { decodeProfile, decodeVector } from "../src/rank.js";
 
 const HOUR = 3600000;
+const athens = (time) => Date.parse(`2026-10-28T${time}:00+02:00`);
 
 const gazzetta = (now) =>
   rss(
@@ -491,7 +492,8 @@ async function subscribed(env, endpoint) {
 
 const highlight = (env, story) => env.DB.sqlite.prepare("UPDATE articles SET affinity = CASE WHEN story = ? THEN 0.9 ELSE 0.1 END").run(story);
 
-test("a story your sources share in your topics is pushed once, at most three times a day", async () => {
+test("a story your sources share in your topics is pushed once, at most three times a day", async (t) => {
+  t.mock.timers.enable({ apis: ["Date"], now: athens("12:00") });
   const env = pooled();
   const now = Date.now();
   await setup(env, now);
@@ -514,7 +516,28 @@ test("a story your sources share in your topics is pushed once, at most three ti
   assert.equal(pushes.length, 1);
 });
 
-test("a lone source, a story only one source wrote, or a dull story never push", async () => {
+test("pushes wait for the morning and come at most once in each third of the day", async (t) => {
+  t.mock.timers.enable({ apis: ["Date"], now: athens("07:00") });
+  const env = pooled();
+  await setup(env, Date.now());
+  const pushes = await subscribed(env);
+  const story = storyOf(env, "Λεβαντόφσκι");
+  highlight(env, story);
+  const at = (time) => {
+    env.DB.sqlite.prepare("UPDATE articles SET published_at = ?, notified_at = NULL").run(athens(time) - HOUR);
+    return notify(env, athens(time), new Set([story]));
+  };
+  assert.equal(await at("07:59"), null);
+  assert.equal(await at("08:00"), story);
+  assert.equal(await at("13:19"), null);
+  assert.equal(await at("13:20"), story);
+  assert.equal(await at("23:00"), story);
+  assert.equal(await at("23:59"), null);
+  assert.equal(pushes.length, 3);
+});
+
+test("a lone source, a story only one source wrote, or a dull story never push", async (t) => {
+  t.mock.timers.enable({ apis: ["Date"], now: athens("12:00") });
   const env = pooled(["gazzetta.example"]);
   const now = Date.now();
   await setup(env, now);
@@ -534,7 +557,8 @@ test("a lone source, a story only one source wrote, or a dull story never push",
   assert.equal(rows(env, "SELECT COUNT(*) AS n FROM subscriptions")[0].n, 1);
 });
 
-test("a dead subscription is dropped when the push service says it is gone", async () => {
+test("a dead subscription is dropped when the push service says it is gone", async (t) => {
+  t.mock.timers.enable({ apis: ["Date"], now: athens("12:00") });
   const env = pooled();
   const now = Date.now();
   await setup(env, now);
