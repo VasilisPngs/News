@@ -53,7 +53,7 @@ addEventListener("visibilitychange", () => {
   if (document.visibilityState === "hidden") flush();
 });
 
-export async function newTopic() {
+async function newTopic() {
   const name = await promptDialog(t("newTopic"), "", { label: t("topicLabel"), hint: t("topicPlaceholder"), action: t("add"), cancel: t("cancel"), required: true });
   if (!name) return;
   try {
@@ -63,7 +63,7 @@ export async function newTopic() {
   }
 }
 
-export function categoryChips() {
+function categoryChips() {
   const taken = new Set(appState().topics.map((topic) => topic.name.toLocaleLowerCase()));
   const chips = CATEGORIES
     .filter((name) => !taken.has(name.toLocaleLowerCase()))

@@ -1,14 +1,11 @@
-import { el, icon, iconButton, snackbar, confirmDialog, chooseDialog, promptDialog, switchInput, sortable } from "../dom.js";
+import { el, icon, iconButton, snackbar, confirmDialog, chooseDialog, promptDialog, switchInput, sortable, emptyState } from "../dom.js";
 import { t, formatter } from "../i18n.js";
 import { goBack } from "../router.js";
 import { themeMode, themeModes, setTheme } from "../theme.js";
 import { pushSupported, pushEnabled, enablePush, disablePush } from "../push.js";
 import { appState, renameTopic, deleteTopic, renameSource, deleteSource, orderSources } from "../store.js";
-import { newTopic, categoryChips } from "./foryou.js";
-import { newSource } from "./sources.js";
 
 const barLead = document.getElementById("bar-lead");
-const barActions = document.getElementById("bar-actions");
 
 const section = (title, content) => el("section", { class: "group" }, [title ? el("h2", { text: title }) : null, content]);
 
@@ -60,11 +57,12 @@ export function renderSettings(container) {
   container.append(section(t("preferences"), el("div", { class: "list" }, [choice(t("theme"), themes, themeMode(), setTheme)])));
 }
 
-function manageList(container, title, rows, addLabel, onAdd) {
+function manageList(container, title, rows, empty) {
   barLead.append(iconButton("back", t("back"), () => goBack("/settings")));
-  barActions.append(iconButton("add", addLabel, onAdd));
   container.dataset.title = title;
-  if (rows.children.length) container.append(section(null, rows));
+  if (rows.children.length) return container.append(section(null, rows));
+  empty.classList.add("page");
+  container.append(empty);
 }
 
 function manageRow(id, label, detail, { onRename, onDelete, draggable }) {
@@ -103,9 +101,7 @@ export function renderTopics(container) {
       })
     )
   );
-  manageList(container, t("topics"), rows, t("newTopic"), newTopic);
-  const chips = categoryChips();
-  if (chips) container.append(section(t("categories"), chips));
+  manageList(container, t("topics"), rows, emptyState("sparkles", t("noTopics"), t("topicsEmptyHint")));
 }
 
 export function renderSourceList(container) {
@@ -133,5 +129,5 @@ export function renderSourceList(container) {
       })
     )
   );
-  manageList(container, t("sources"), sortable(rows, (ids) => attempt(() => orderSources(ids))), t("newSource"), newSource);
+  manageList(container, t("sources"), sortable(rows, (ids) => attempt(() => orderSources(ids))), emptyState("news", t("noSources"), t("sourcesEmptyHint")));
 }

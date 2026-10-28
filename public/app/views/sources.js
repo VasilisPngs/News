@@ -10,7 +10,7 @@ const barActions = document.getElementById("bar-actions");
 const SOURCE_KEY = "news.source";
 let observer = null;
 
-export async function newSource() {
+async function newSource() {
   const url = await promptDialog(t("newSource"), "", { label: t("sourceLabel"), hint: t("sourcePlaceholder"), action: t("add"), cancel: t("cancel"), required: true });
   if (!url) return;
   snackbar(t("sourceSearching"));
