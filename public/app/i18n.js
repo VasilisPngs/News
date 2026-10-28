@@ -68,7 +68,7 @@ const STRINGS = {
   notificationsFailed: "Δεν ενεργοποιήθηκαν οι ειδοποιήσεις.",
   preferences: "Προτιμήσεις",
   theme: "Θέμα",
-  themeSystem: "Σύστημα",
+  themeSystem: "Προεπιλογή συστήματος",
   themeLight: "Φωτεινό",
   themeDark: "Σκούρο"
 };
