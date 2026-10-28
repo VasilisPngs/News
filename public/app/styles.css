@@ -342,13 +342,9 @@ input:focus-visible {
   transition: color var(--md-default-effects);
 }
 
-.nav-item .on,
+.nav-item:not(.current) .on,
 .nav-item.current .off {
   visibility: hidden;
-}
-
-.nav-item.current .on {
-  visibility: visible;
 }
 
 .nav-item.current {
