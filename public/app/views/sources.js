@@ -57,7 +57,7 @@ export function renderSources(container) {
   if (sources.length) barActions.append(iconButton("refresh", t("refresh"), refreshNow));
   barActions.append(iconButton("add", t("newSource"), newSource));
   if (sources.length === 0) {
-    container.append(page(emptyState("news", t("noSources"), t("noSourcesHint"), el("button", { class: "btn", type: "button", text: t("newSource"), onclick: newSource }))));
+    container.append(page(emptyState("newspaper", t("noSources"), t("noSourcesHint"), el("button", { class: "btn", type: "button", text: t("newSource"), onclick: newSource }))));
     return;
   }
   if (sources.length > 1) container.append(el("div", { class: "list-bar" }, sourceChips(sources, active)));
@@ -68,7 +68,7 @@ export function renderSources(container) {
     return;
   }
   if (!current || current.items.length === 0) {
-    container.append(page(emptyState("news", t("noArticles"), t("noArticlesHint"))));
+    container.append(page(emptyState("newspaper", t("noArticles"), t("noArticlesHint"))));
     return;
   }
   for (const [day, items] of byDay(current.items)) {
