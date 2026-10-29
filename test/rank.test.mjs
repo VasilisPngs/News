@@ -38,8 +38,8 @@ test("an article joins the story closest to it in meaning, or starts its own whe
     { story: "a", vector: quantize([1, 0, 0]) },
     { story: "b", vector: quantize([0, 1, 0]) }
   ]);
-  assert.equal(group("n1", quantize([1, 0.4, 0])), "a");
-  assert.equal(group("n2", quantize([0.6, 1, 0])), "b");
+  assert.equal(group("n1", quantize([1, 0.3, 0])), "a");
+  assert.equal(group("n2", quantize([0.3, 1, 0])), "b");
   assert.equal(group("n3", quantize([1, 0, 1])), "n3");
   assert.equal(group("n4", quantize([0.9, 0, 1])), "n3");
 });

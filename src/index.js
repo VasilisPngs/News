@@ -3,7 +3,8 @@ import { parseFeed, download, discover, looksLikeFeed, siteIcon, pageImage } fro
 import { quantize, encodeVector, decodeVector, encodeProfile, decodeProfile, learn, affinity, tokens, grouper } from "./rank.js";
 import { createKey, publicKey, pushEndpoint, keyLength, sendPush } from "./push.js";
 
-const EMBED_MODEL = "@cf/baai/bge-m3";
+const EMBED_MODEL = "@cf/google/embeddinggemma-300m";
+const TITLE_TASK = "task: clustering | query: ";
 const SUGGEST_MODEL = "@cf/google/gemma-4-26b-a4b-it";
 const SUGGEST_COUNT = 12;
 const POOL_PER_RUN = 2;
@@ -516,7 +517,7 @@ async function interests(env) {
 
 async function enrich(env, now, list) {
   const [vectors, taste, recent] = await Promise.all([
-    embed(env, list.map((entry) => entry.title)),
+    embed(env, list.map((entry) => TITLE_TASK + entry.title)),
     interests(env),
     env.DB.prepare("SELECT story, vector FROM articles WHERE vector IS NOT NULL AND published_at > ?1 ORDER BY published_at DESC LIMIT ?2").bind(now - WINDOW_MS, STORY_SCAN).all()
   ]);

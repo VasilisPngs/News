@@ -49,13 +49,13 @@ export function context() {
 }
 
 function wordVector(text) {
-  const vector = new Array(1024).fill(0);
+  const vector = new Array(768).fill(0);
   for (const word of text.toLowerCase().split(/[^\p{L}\p{N}]+/u).filter(Boolean)) {
     let hash = 0;
     for (const char of word) hash = (hash * 31 + char.codePointAt(0)) >>> 0;
-    vector[hash % 1024] += 1;
+    vector[hash % 768] += 1;
   }
-  vector[1023] += 0.01;
+  vector[767] += 0.01;
   return vector;
 }
 
@@ -65,7 +65,7 @@ export function ai({ sites = [] } = {}) {
     calls,
     run: async (model, input) => {
       calls.push({ model, input });
-      if (model === "@cf/baai/bge-m3") return { shape: [input.text.length, 1024], data: input.text.map(wordVector) };
+      if (model === "@cf/google/embeddinggemma-300m") return { shape: [input.text.length, 768], data: input.text.map(wordVector) };
       if (model === "@cf/google/gemma-4-26b-a4b-it") return { choices: [{ message: { role: "assistant", content: sites.join("\n") } }] };
       throw new Error(`unexpected model ${model}`);
     }

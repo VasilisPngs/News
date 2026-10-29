@@ -1,5 +1,5 @@
 const DECAY = 0.97;
-const SAME_STORY = 0.75;
+const SAME_STORY = 0.92;
 const STOP = new Set(
   "και του της των τον την στο στη στην στον στα στις στους από για με που ένα μια μία ειδήσεις νέα μετά πριν είναι θα δεν ότι πως όπως αυτό αυτή ποιος ποια ποιο έχει έχουν ήταν the and for with from that this into over after about what when where how are was were has have will its new news says said video photos live update"
     .split(" ")

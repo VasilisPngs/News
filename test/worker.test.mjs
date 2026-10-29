@@ -64,7 +64,7 @@ test("For You picks from the sites the AI found for your topics, grouped by stor
   assert.deepEqual(response.json.topics.map((topic) => topic.name), ["Μπαρτσελόνα"]);
   assert.deepEqual(response.json.sources, []);
   assert.ok(response.json.pushKey.length > 80);
-  assert.match(env.AI.calls.find((call) => call.model.includes("gemma")).input.messages[0].content, /"Μπαρτσελόνα"/);
+  assert.match(env.AI.calls.find((call) => call.input.messages).input.messages[0].content, /"Μπαρτσελόνα"/);
   assert.deepEqual(rows(env, "SELECT title, hidden FROM sources ORDER BY title"), [{ title: "Gazzetta", hidden: 1 }, { title: "Sport24", hidden: 1 }]);
   assert.deepEqual(rows(env, "SELECT domain, tried FROM candidates ORDER BY domain"), [{ domain: "gazzetta.example", tried: 1 }, { domain: "sport.example", tried: 1 }]);
   assert.deepEqual((await api(worker, env, "/api/state", {})).json.sources, []);
@@ -249,7 +249,7 @@ test("renaming a topic looks for its sites again and deleting it drops them, kee
   const again = rows(env, "SELECT id FROM sources WHERE hidden = 1").map((row) => row.id);
   assert.equal(again.length, 2);
   assert.ok(again.every((source) => !before.includes(source)));
-  assert.equal(env.AI.calls.filter((call) => call.model.includes("gemma")).length, 2);
+  assert.equal(env.AI.calls.filter((call) => call.input.messages).length, 2);
   const after = await api(worker, env, "/api/topics", { action: "delete", id });
   assert.deepEqual(after.json.topics, []);
   assert.deepEqual(rows(env, "SELECT title FROM sources"), [{ title: "Followed" }]);
