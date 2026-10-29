@@ -64,11 +64,7 @@ async function newTopic() {
 }
 
 function categoryChips() {
-  const taken = new Set(appState().topics.map((topic) => topic.name.toLocaleLowerCase()));
-  const chips = CATEGORIES
-    .filter((name) => !taken.has(name.toLocaleLowerCase()))
-    .map((name) => assistChip(name, () => addTopic(name).catch(() => snackbar(t("actionFailed")))));
-  return chips.length ? el("div", { class: "chips wrap" }, chips) : null;
+  return el("div", { class: "chips wrap" }, CATEGORIES.map((name) => assistChip(name, () => addTopic(name).catch(() => snackbar(t("actionFailed"))))));
 }
 
 function page(state) {
