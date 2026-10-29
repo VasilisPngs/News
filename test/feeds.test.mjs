@@ -104,6 +104,30 @@ test("a feed in a Greek legacy encoding is read in the charset it declares", asy
   }
 });
 
+test("a feed that sends no length is read only up to the size limit", async () => {
+  const chunk = new Uint8Array(65536).fill(32);
+  let pulled = 0;
+  network([
+    [
+      "https://huge.example/feed",
+      () =>
+        new Response(
+          new ReadableStream({
+            pull(controller) {
+              if (pulled >= 50_000_000) return controller.close();
+              pulled += chunk.length;
+              controller.enqueue(chunk);
+            }
+          }),
+          { headers: { "content-type": "application/rss+xml" } }
+        )
+    ]
+  ]);
+  const { text } = await download("https://huge.example/feed");
+  assert.equal(text.length, 2_000_000);
+  assert.ok(pulled < 2_200_000, `read ${pulled} bytes`);
+});
+
 test("a site address leads to the feed its page links to", async () => {
   network([
     ["https://blog.example/", () => new Response('<html><head><title>My Blog - Home</title><meta property="og:site_name" content="My Blog"><link rel="alternate" type="application/rss+xml" href="/feed.xml"><link rel="apple-touch-icon" href="/apple.png"></head></html>', { headers: { "content-type": "text/html" } })],

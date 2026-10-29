@@ -141,7 +141,14 @@ export async function download(url, headers = {}) {
     await response.body?.cancel();
     return { status: response.status || 502, text: "", url: response.url || url };
   }
-  const text = decode((await response.bytes()).subarray(0, MAX_BYTES), response.headers.get("content-type"));
+  const parts = [];
+  let size = 0;
+  for await (const chunk of response.body ?? []) {
+    parts.push(chunk);
+    size += chunk.byteLength;
+    if (size >= MAX_BYTES) break;
+  }
+  const text = decode((await new Blob(parts).bytes()).subarray(0, MAX_BYTES), response.headers.get("content-type"));
   return { status: response.status, text, url: response.url || url, etag: response.headers.get("etag"), modified: response.headers.get("last-modified") };
 }
 
