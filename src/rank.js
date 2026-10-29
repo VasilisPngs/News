@@ -17,27 +17,15 @@ export function quantize(values) {
   return Int8Array.from(values, (value) => Math.round(value * scale));
 }
 
-function toBase64(view) {
-  const bytes = new Uint8Array(view.buffer, view.byteOffset, view.byteLength);
-  let binary = "";
-  for (let index = 0; index < bytes.length; index += 1) binary += String.fromCharCode(bytes[index]);
-  return btoa(binary);
-}
-
-function fromBase64(text) {
-  const binary = atob(text);
-  const bytes = new Uint8Array(binary.length);
-  for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
-  return bytes;
-}
+const toBase64 = (view) => new Uint8Array(view.buffer, view.byteOffset, view.byteLength).toBase64();
 
 export const encodeVector = (vector) => toBase64(vector);
 
-export const decodeVector = (text) => (text ? new Int8Array(fromBase64(text).buffer) : null);
+export const decodeVector = (text) => (text ? new Int8Array(Uint8Array.fromBase64(text).buffer) : null);
 
 export const encodeProfile = (profile) => toBase64(profile);
 
-export const decodeProfile = (text) => (text ? new Float32Array(fromBase64(text).buffer) : null);
+export const decodeProfile = (text) => (text ? new Float32Array(Uint8Array.fromBase64(text).buffer) : null);
 
 const norms = new WeakMap();
 

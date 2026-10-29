@@ -71,7 +71,7 @@ function chunks(list, size) {
 
 async function hashId(text) {
   const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text)));
-  return Array.from(digest.slice(0, 16), (byte) => byte.toString(16).padStart(2, "0")).join("");
+  return digest.slice(0, 16).toHex();
 }
 
 const getMeta = (env, key) => env.DB.prepare("SELECT value FROM meta WHERE key = ?1").bind(key).first("value");

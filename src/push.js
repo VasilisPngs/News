@@ -4,17 +4,9 @@ const TOKEN_LIFETIME_S = 3600;
 const PUSH_TIMEOUT_MS = 5000;
 const PUSH_HOSTS = /(^|\.)(push\.apple\.com|fcm\.googleapis\.com|push\.services\.mozilla\.com|notify\.windows\.com)$/;
 
-export function base64UrlDecode(value) {
-  const padded = value.replace(/-/g, "+").replace(/_/g, "/");
-  const binary = atob(padded + "=".repeat((4 - (padded.length % 4)) % 4));
-  return Uint8Array.from(binary, (char) => char.charCodeAt(0));
-}
+export const base64UrlDecode = (value) => Uint8Array.fromBase64(value, { alphabet: "base64url" });
 
-export function base64UrlEncode(bytes) {
-  let binary = "";
-  for (const byte of bytes) binary += String.fromCharCode(byte);
-  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-}
+export const base64UrlEncode = (bytes) => bytes.toBase64({ alphabet: "base64url", omitPadding: true });
 
 function concat(...parts) {
   const out = new Uint8Array(parts.reduce((total, part) => total + part.length, 0));

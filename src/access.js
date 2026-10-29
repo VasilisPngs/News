@@ -7,13 +7,7 @@ const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "0.0.0.0", "[::1]"]);
 let cachedKeys = null;
 let cachedAt = 0;
 
-function bytesFromBase64Url(value) {
-  const padded = value.replace(/-/g, "+").replace(/_/g, "/");
-  const binary = atob(padded + "=".repeat((4 - (padded.length % 4)) % 4));
-  const bytes = new Uint8Array(binary.length);
-  for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
-  return bytes;
-}
+const bytesFromBase64Url = (value) => Uint8Array.fromBase64(value, { alphabet: "base64url" });
 
 const jsonFromBase64Url = (value) => JSON.parse(new TextDecoder().decode(bytesFromBase64Url(value)));
 
