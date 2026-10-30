@@ -29,7 +29,7 @@ const known = (path) => ROUTES.some((route) => route.pattern.test({ pathname: pa
 function previousEntry() {
   const index = window.navigation.currentEntry.index;
   const entry = index > 0 ? window.navigation.entries()[index - 1] : null;
-  return entry && entry.sameDocument ? new URL(entry.url).pathname : null;
+  return entry && entry.sameDocument && entry.url ? new URL(entry.url).pathname : null;
 }
 
 function settle(result) {
