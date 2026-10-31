@@ -659,13 +659,9 @@ export async function refresh(env, now, { owner = null, hidden = null } = {}) {
 }
 
 async function percentile(env, now) {
-  const since = now - WINDOW_MS;
-  const total = await env.DB.prepare("SELECT COUNT(*) AS n FROM articles WHERE vector IS NOT NULL AND published_at > ?1").bind(since).first("n");
-  if (!total) return Infinity;
-  const value = await env.DB.prepare("SELECT affinity FROM articles WHERE vector IS NOT NULL AND published_at > ?1 ORDER BY affinity LIMIT 1 OFFSET ?2")
-    .bind(since, Math.min(total - 1, Math.floor(total * NOTIFY_PERCENTILE)))
-    .first("affinity");
-  return value ?? Infinity;
+  const { results } = await env.DB.prepare("SELECT affinity FROM articles WHERE vector IS NOT NULL AND published_at > ?1").bind(now - WINDOW_MS).all();
+  const values = results.map((row) => row.affinity).sort((a, b) => a - b);
+  return values.length ? values[Math.min(values.length - 1, Math.floor(values.length * NOTIFY_PERCENTILE))] : Infinity;
 }
 
 async function threshold(env, now) {

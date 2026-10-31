@@ -504,6 +504,7 @@ test("a story your sources share in your topics is pushed once, at most three ti
   assert.equal(await notify(env, now, new Set([story])), null);
   env.DB.sqlite.prepare("UPDATE meta SET value = ? WHERE key = 'threshold'").run(`${now - 3600000} 0.95`);
   assert.equal(await notify(env, now, new Set([story])), story);
+  assert.equal(env.DB.sqlite.prepare("SELECT value FROM meta WHERE key = 'threshold'").get().value, `${now} 0.9`);
   assert.equal(pushes.length, 1);
   assert.equal(pushes[0].body.web_push, 8030);
   assert.equal(pushes[0].body.notification.body, "Gazzetta · 2 πηγές");
