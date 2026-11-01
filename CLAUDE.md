@@ -3,7 +3,7 @@
 ## Git & repository workflow
 - Push changes directly to `main`; do not open pull requests.
 - Publish every completed change set as exactly one commit.
-- This file is shared by VasilisPngs/AppUpdater, VasilisPngs/Adblock, VasilisPngs/AdblockDNS, VasilisPngs/GymTracker and VasilisPngs/News: every change to it is made identically in all five repositories at the same time.
+- This file is shared by VasilisPngs/AppUpdater, VasilisPngs/Adblock, VasilisPngs/Video-Player, VasilisPngs/AdblockDNS, VasilisPngs/GymTracker and VasilisPngs/News: every change to it is made identically in all six repositories at the same time.
 
 ## General rules
 - Follow only Google's official guidance and rules: Material Design, the Android developer documentation and Google's own libraries and samples. When the user asks for something beyond them, first say plainly that it departs from Google and which guideline it breaks, and go ahead only once they confirm. A confirmed departure changes the code only, never this file, which stays on Google's guidance by default; a departure already in the code is the user's settled decision, so ask before reverting it.
