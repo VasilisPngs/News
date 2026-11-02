@@ -22,7 +22,6 @@ const ERROR_RETENTION_MS = 30 * 86400000;
 const FOR_YOU_LIMIT = 60;
 const EXPLORE_EVERY = 5;
 const VIEW_PENALTY = 0.12;
-const FRESHNESS = 1;
 const VIEW_CAP = 6;
 const VIEW_GAP_MS = 30 * 60000;
 const PULL_STALE_MS = 2 * 60000;
@@ -327,7 +326,7 @@ export function pick(rows, now, limit = FOR_YOU_LIMIT) {
   const median = sorted.length ? sorted[Math.floor(sorted.length / 2)] : 0;
   const quartile = sorted.length ? sorted[Math.floor(sorted.length / 4)] : 0;
   const spread = (sorted.at(-1) ?? 0) - median || 1;
-  const novelty = (row) => Math.min(row.coverage - 1, 5) * 0.05 - ((now - row.published_at) / WINDOW_MS) * FRESHNESS - Math.min(row.views || 0, VIEW_CAP) * VIEW_PENALTY;
+  const novelty = (row) => Math.min(row.coverage - 1, 5) * 0.05 - (now - row.published_at) / WINDOW_MS - Math.min(row.views || 0, VIEW_CAP) * VIEW_PENALTY;
   const score = (row) => (row.affinity - median) / spread + novelty(row);
   const usual = rows.filter((row) => row.affinity >= median).sort((a, b) => score(b) - score(a));
   const fresh = rows.filter((row) => row.affinity >= quartile && row.affinity < median).sort((a, b) => novelty(b) - novelty(a));

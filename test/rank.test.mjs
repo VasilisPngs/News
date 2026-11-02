@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { quantize, encodeVector, decodeVector, encodeProfile, decodeProfile, learn, affinity, tokens, grouper } from "../src/rank.js";
 import { cosine } from "./helpers.mjs";
 
-const unit = (index, size = 8) => Array.from({ length: size }, (_, position) => (position === index ? 1 : 0));
+const unit = (index) => Array.from({ length: 8 }, (_, position) => (position === index ? 1 : 0));
 
 test("vectors survive the text round trip and keep their direction", () => {
   const values = [0.5, -0.25, 0.125, -1, 0.75, 0, 0.3, -0.6];

@@ -49,9 +49,7 @@ function similarity(a, left, b, right) {
 }
 
 export function learn(profile, vector, weight) {
-  let norm = 0;
-  for (const value of vector) norm += value * value;
-  norm = Math.sqrt(norm) || 1;
+  const norm = Math.sqrt(squares(vector)) || 1;
   const next = new Float32Array(vector.length);
   for (let index = 0; index < vector.length; index += 1) next[index] = (profile && profile.length === vector.length ? profile[index] * DECAY : 0) + (weight * vector[index]) / norm;
   return next;
@@ -72,12 +70,6 @@ export function tokens(title) {
   return [...new Set(words)].slice(0, 16);
 }
 
-function magnitude(vector) {
-  let sum = 0;
-  for (let index = 0; index < vector.length; index += 1) sum += vector[index] * vector[index];
-  return Math.sqrt(sum);
-}
-
 function dot(a, b) {
   let sum = 0;
   for (let index = 0; index < a.length; index += 1) sum = (sum + a[index] * b[index]) | 0;
@@ -85,9 +77,9 @@ function dot(a, b) {
 }
 
 export function grouper(recent) {
-  const members = recent.map(({ story, vector }) => ({ story, vector, length: magnitude(vector) }));
+  const members = recent.map(({ story, vector }) => ({ story, vector, length: Math.sqrt(squares(vector)) }));
   return (id, vector) => {
-    const length = magnitude(vector);
+    const length = Math.sqrt(squares(vector));
     let story = id;
     let closest = SAME_STORY;
     for (const member of members) {
