@@ -18,7 +18,6 @@ const STORY_SCAN = 600;
 const RETENTION_MS = 14 * 86400000;
 const POSTERS_PER_RUN = 3;
 const RESCORE_LIMIT = 400;
-const ERROR_RETENTION_MS = 30 * 86400000;
 const FOR_YOU_LIMIT = 60;
 const EXPLORE_EVERY = 5;
 const VIEW_PENALTY = 0.12;
@@ -112,8 +111,8 @@ async function state(env) {
 
 const addFeed = (env, url, owner) => env.DB.prepare("INSERT OR IGNORE INTO feeds (url, owner, fetched_at) VALUES (?1, ?2, 0)").bind(url, owner);
 
-function background(env, ctx, work, route) {
-  ctx.waitUntil(work.catch((error) => recordError(env, { kind: "background", message: String(error && error.message), route })));
+function background(ctx, work, route) {
+  ctx.waitUntil(work.catch((error) => logError({ kind: "background", message: String(error && error.message), route })));
 }
 
 const unpool = (env, topic) => [
@@ -214,7 +213,7 @@ async function topicsRoute(request, env, ctx) {
   if (body.action === "delete") {
     const id = String(body.id || "");
     await env.DB.batch([...unpool(env, id), env.DB.prepare("DELETE FROM topics WHERE id = ?1").bind(id)]);
-    background(env, ctx, rescore(env, Date.now()), "/topics");
+    background(ctx, rescore(env, Date.now()), "/topics");
     return json(await state(env));
   }
   if (body.action !== "add" && body.action !== "rename") return json({ error: "invalid_action" }, 400);
@@ -231,7 +230,7 @@ async function topicsRoute(request, env, ctx) {
       ? [env.DB.prepare("INSERT INTO topics (id, name, vector, position, created_at) VALUES (?1, ?2, ?3, (SELECT COALESCE(MAX(position) + 1, 0) FROM topics), ?4)").bind(id, name, encoded, Date.now())]
       : [...unpool(env, id), env.DB.prepare("UPDATE topics SET name = ?2, vector = ?3, pooled_at = NULL WHERE id = ?1").bind(id, name, encoded)]
   );
-  background(env, ctx, seed(env, id), "/topics");
+  background(ctx, seed(env, id), "/topics");
   return json(await state(env));
 }
 
@@ -280,7 +279,6 @@ async function sourcesRoute(request, env, ctx) {
     addFeed(env, found.feed, created)
   ]);
   background(
-    env,
     ctx,
     refresh(env, Date.now(), { owner: created }).then(() => Promise.all([icons(env), posters(env, Date.now())])),
     "/sources"
@@ -481,21 +479,21 @@ const REPORT_LIMIT = 20;
 let reportWindow = 0;
 let reportCount = 0;
 
-function recordError(env, entry) {
-  return env.DB.prepare("INSERT INTO errors (at, kind, message, stack, route, agent) VALUES (?1, ?2, ?3, ?4, ?5, ?6)")
-    .bind(
-      Date.now(),
-      String(entry.kind || "error").slice(0, 20),
-      String(entry.message || "").slice(0, 300),
-      String(entry.stack || "").slice(0, 1000) || null,
-      String(entry.route || "").slice(0, 120) || null,
-      String(entry.agent || "").slice(0, 200) || null
-    )
-    .run()
-    .catch(() => {});
+function logError(entry) {
+  console.error(
+    JSON.stringify({
+      error: {
+        kind: String(entry.kind || "error").slice(0, 20),
+        message: String(entry.message || "").slice(0, 300),
+        stack: String(entry.stack || "").slice(0, 1000) || null,
+        route: String(entry.route || "").slice(0, 120) || null,
+        agent: String(entry.agent || "").slice(0, 200) || null
+      }
+    })
+  );
 }
 
-async function reportRoute(request, env) {
+async function reportRoute(request) {
   const now = Date.now();
   if (now - reportWindow > REPORT_WINDOW_MS) {
     reportWindow = now;
@@ -505,7 +503,7 @@ async function reportRoute(request, env) {
   reportCount += 1;
   const payload = await readJson(request);
   const message = typeof payload.message === "string" ? payload.message.trim() : "";
-  if (message) await recordError(env, { ...payload, message, agent: request.headers.get("user-agent") });
+  if (message) logError({ ...payload, message, agent: request.headers.get("user-agent") });
   return json({ ok: true });
 }
 
@@ -597,13 +595,13 @@ async function rescore(env, now) {
   return updates.length;
 }
 
-function failure(env, now, url, page) {
+function failure(url, page) {
   let landed = "";
   try {
     landed = new URL(page.url || url).host;
   } catch {}
   const reason = page.status === 200 ? `not a feed: ${page.text.slice(0, 120).replace(/\s+/g, " ")}` : page.status ? `http ${page.status}` : page.error || "unreachable";
-  return env.DB.prepare("INSERT INTO errors (at, kind, message, route) VALUES (?1, 'feed', ?2, ?3)").bind(now, `${reason} (${landed})`.slice(0, 300), url.slice(0, 120));
+  logError({ kind: "feed", message: `${reason} (${landed})`, route: url });
 }
 
 function conditional(feed) {
@@ -634,7 +632,7 @@ export async function refresh(env, now, { owner = null, hidden = null } = {}) {
     }
     if (page.status !== 200 || !looksLikeFeed(page.text)) {
       updates.push(env.DB.prepare("UPDATE feeds SET fetched_at = ?2, failures = failures + 1 WHERE url = ?1").bind(feed.url, now));
-      if (feed.failures < 2) updates.push(failure(env, now, feed.url, page));
+      if (feed.failures < 2) failure(feed.url, page);
       continue;
     }
     updates.push(env.DB.prepare("UPDATE feeds SET fetched_at = ?2, failures = 0, etag = ?3, modified = ?4 WHERE url = ?1").bind(feed.url, now, page.etag || null, page.modified || null));
@@ -734,7 +732,6 @@ export async function notify(env, now, touched) {
 export async function prune(env, now) {
   await env.DB.batch([
     env.DB.prepare("DELETE FROM articles WHERE saved_at IS NULL AND seen_at < ?1").bind(now - RETENTION_MS),
-    env.DB.prepare("DELETE FROM errors WHERE at < ?1").bind(now - ERROR_RETENTION_MS),
     env.DB.prepare("DELETE FROM meta WHERE key LIKE 'sent:%' AND key < ?1").bind(`sent:${athensDay(now - 2 * 86400000)}`)
   ]);
 }
@@ -788,7 +785,7 @@ export default {
           await rescore(env, now);
           await prune(env, now);
         }
-      })().catch((error) => recordError(env, { kind: "cron", message: String(error && error.message ? error.message : error), stack: error && error.stack, route: "/cron" }))
+      })().catch((error) => logError({ kind: "cron", message: String(error && error.message ? error.message : error), stack: error && error.stack, route: "/cron" }))
     );
   }
 };

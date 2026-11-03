@@ -456,7 +456,8 @@ test("a site without any feed is refused", async () => {
   assert.equal(response.json.error, "no_feed");
 });
 
-test("the cron fetches only due feeds, backs off failures and honours not modified", async () => {
+test("the cron fetches only due feeds, backs off failures and honours not modified", async (t) => {
+  const logged = t.mock.method(console, "error", () => {});
   const env = environment();
   const now = Date.now();
   await setup(env, now, { topic: null, follow: ["gazzetta.example"] });
@@ -465,7 +466,7 @@ test("the cron fetches only due feeds, backs off failures and honours not modifi
   assert.equal(rows(env, "SELECT failures FROM feeds")[0].failures, 0);
   await refresh(env, now + 21 * 60000);
   assert.equal(rows(env, "SELECT failures FROM feeds")[0].failures, 1);
-  assert.deepEqual(rows(env, "SELECT kind, message FROM errors").map((row) => [row.kind, row.message]), [["feed", "http 503 (gazzetta.example)"]]);
+  assert.deepEqual(logged.mock.calls.map((call) => JSON.parse(call.arguments[0]).error).map((error) => [error.kind, error.message]), [["feed", "http 503 (gazzetta.example)"]]);
   const calls = network([["https://gazzetta.example/", () => new Response(null, { status: 304 })]]);
   await refresh(env, now + 55 * 60000);
   assert.equal(calls.length, 0);
@@ -587,7 +588,8 @@ test("pruning drops unsaved articles after two weeks", async () => {
   assert.deepEqual(rows(env, "SELECT id FROM articles").map((row) => row.id), [ids[0]]);
 });
 
-test("the hourly cron runs refresh, notify, backfill, rescore and prune without throwing", async () => {
+test("the hourly cron runs refresh, notify, backfill, rescore and prune without throwing", async (t) => {
+  const logged = t.mock.method(console, "error", () => {});
   const env = pooled();
   const now = Date.now();
   await setup(env, now);
@@ -597,7 +599,7 @@ test("the hourly cron runs refresh, notify, backfill, rescore and prune without 
   await worker.scheduled({ scheduledTime: when }, env, ctx);
   await ctx.settle();
   assert.equal(calls.filter((request) => new URL(request.url).pathname === "/").length, 2);
-  assert.equal(rows(env, "SELECT COUNT(*) AS n FROM errors")[0].n, 0);
+  assert.equal(logged.mock.callCount(), 0);
   assert.equal(rows(env, "SELECT COUNT(*) AS n FROM articles")[0].n, 6);
 });
 
