@@ -52,7 +52,8 @@
   --md-default-spatial: 434ms linear(0, 0.0243, 0.0858, 0.1698, 0.2656, 0.365, 0.4623, 0.5538, 0.6371, 0.7108, 0.7748, 0.829, 0.874, 0.9107, 0.94, 0.9629, 0.9803, 0.9931, 1.0023, 1.0084, 1.0123, 1.0144, 1.0151, 1.015, 1.0142, 1.013, 1.0116, 1.0101, 1.0086, 1.0071, 1.0058, 1.0047, 1.0037, 1.0028, 1.0021, 1.0015, 1);
   --md-fast-effects: 149ms linear(0, 0.1788, 0.4524, 0.6683, 0.8099, 0.8949, 0.9434, 0.97, 0.9844, 0.992, 0.9959, 0.9979, 1);
   --md-default-effects: 230ms linear(0, 0.0855, 0.2526, 0.4262, 0.5766, 0.6961, 0.7862, 0.852, 0.8987, 0.9314, 0.9539, 0.9692, 0.9796, 0.9865, 0.9912, 0.9942, 0.9962, 0.9975, 0.9984, 1);
-  --md-shadow-2: 0 1px 2px rgb(0 0 0 / 0.3), 0 2px 6px 2px rgb(0 0 0 / 0.15);
+  --spring-medium: 238ms linear(0, 0.0786, 0.2355, 0.4022, 0.55, 0.6702, 0.7629, 0.8322, 0.8826, 0.9187, 0.9441, 0.9619, 0.9741, 0.9825, 0.9882, 0.9921, 0.9947, 0.9965, 0.9977, 0.9985, 1);
+  --spring-medium-low: 461ms linear(0, 0.0239, 0.0821, 0.159, 0.2443, 0.3309, 0.4145, 0.4926, 0.5638, 0.6275, 0.6837, 0.7327, 0.7751, 0.8115, 0.8426, 0.8689, 0.8911, 0.9098, 0.9254, 0.9385, 0.9493, 0.9584, 0.9658, 0.972, 0.9771, 0.9813, 0.9847, 0.9875, 0.9898, 0.9917, 0.9933, 0.9945, 0.9956, 0.9964, 0.9971, 0.9976, 0.9981, 0.9985, 0.9987, 1);
   --md-shadow-3: 0 1px 3px rgb(0 0 0 / 0.3), 0 4px 8px 3px rgb(0 0 0 / 0.15);
   --md-shadow-4: 0 2px 3px rgb(0 0 0 / 0.3), 0 6px 10px 4px rgb(0 0 0 / 0.15);
   --margin: 16px;
@@ -187,7 +188,24 @@ a {
   background: currentColor;
   opacity: 0;
   pointer-events: none;
-  transition: opacity var(--md-fast-effects);
+  transition: opacity 15ms linear;
+}
+
+.ripple {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.ripple > span {
+  position: absolute;
+  top: 0;
+  left: 0;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0;
 }
 
 @media (hover: hover) {
@@ -197,13 +215,6 @@ a {
   .manage:has(> .grow:hover)::after {
     opacity: 0.08;
   }
-}
-
-:is(.icon-btn, .btn, .chip, .list-item.action, label.list-item, .menu-item):not(:disabled):active::after,
-.nav-item:active .nav-indicator::after,
-.article:has(.article-link:active)::after,
-.manage:has(> .grow:active)::after {
-  opacity: 0.1;
 }
 
 :focus-visible {
@@ -281,7 +292,8 @@ input:focus-visible {
   cursor: pointer;
 }
 
-.icon-btn::after {
+.icon-btn::after,
+.icon-btn > .ripple {
   inset: 4px;
 }
 
@@ -458,7 +470,11 @@ label.list-item {
   background: var(--md-on-surface);
 }
 
-.list-item > .icon:last-child {
+:is(.list-item.action, label.list-item, .article, .manage, .menu-item) > .ripple {
+  color: var(--md-on-surface);
+}
+
+.list-item > .icon:nth-last-child(1 of :not(.ripple)) {
   color: var(--md-on-surface-variant);
 }
 
@@ -716,44 +732,11 @@ label.list-item {
   overflow-x: auto;
   overflow-y: hidden;
   scrollbar-width: none;
-  mask-image: linear-gradient(to right, transparent, #000 var(--chips-start), #000 calc(100% - var(--chips-end)), transparent);
-  animation: chips-edges linear both;
-  animation-timeline: scroll(self inline);
 }
 
 .chips.wrap {
   flex-wrap: wrap;
   overflow: visible;
-}
-
-@property --chips-start {
-  syntax: "<length>";
-  inherits: false;
-  initial-value: 0px;
-}
-
-@property --chips-end {
-  syntax: "<length>";
-  inherits: false;
-  initial-value: 0px;
-}
-
-@keyframes chips-edges {
-  from {
-    --chips-start: 0px;
-    --chips-end: 32px;
-  }
-
-  1%,
-  99% {
-    --chips-start: 32px;
-    --chips-end: 32px;
-  }
-
-  to {
-    --chips-start: 32px;
-    --chips-end: 0px;
-  }
 }
 
 @media (pointer: fine) {
@@ -971,18 +954,29 @@ label.list-item {
   top: var(--topbar);
   left: calc(var(--rail) + (100% - var(--rail)) / 2 - 24px);
   z-index: 25;
-  box-shadow: var(--md-shadow-2);
-  opacity: 0;
+  display: grid;
+  border-radius: 50%;
+  background: var(--md-primary-container);
   pointer-events: none;
   transform: translateY(-48px);
 }
 
-.pull.shown {
-  opacity: 1;
+.pull > * {
+  grid-area: 1 / 1;
+  transition: opacity var(--md-default-effects);
+}
+
+.pull > * + * {
+  animation: fade-in var(--md-default-effects);
+}
+
+.pull.refreshing > :first-child,
+.pull:not(.refreshing) > * + * {
+  opacity: 0;
 }
 
 .pull.settling {
-  transition: transform var(--md-default-spatial), opacity var(--md-default-effects);
+  transition: transform var(--spring-medium);
 }
 
 @keyframes fade-in {
@@ -1013,8 +1007,8 @@ html.locked {
   gap: 16px;
   overflow-y: auto;
   overscroll-behavior: contain;
-  animation: dialog-grow var(--md-default-spatial), fade-in var(--md-default-effects);
-  transition: opacity var(--md-fast-effects), transform var(--md-fast-effects);
+  animation: dialog-in 220ms cubic-bezier(0.2, 0, 0, 1);
+  transition: opacity 150ms cubic-bezier(0.3, 0, 1, 1), transform 150ms cubic-bezier(0.3, 0, 1, 1);
 }
 
 .dialog:not([open]) {
@@ -1027,13 +1021,13 @@ html.locked {
 
 .dialog::backdrop {
   background: rgb(0 0 0 / 0.32);
-  animation: fade-in var(--md-default-effects);
-  transition: opacity var(--md-fast-effects);
+  animation: fade-in 70ms linear;
+  transition: opacity 48ms linear;
 }
 
 .dialog.closing {
   opacity: 0;
-  transform: scale(0.95);
+  transform: translateY(-10px);
   pointer-events: none;
 }
 
@@ -1041,9 +1035,10 @@ html.locked {
   opacity: 0;
 }
 
-@keyframes dialog-grow {
+@keyframes dialog-in {
   from {
-    transform: scale(0.85);
+    opacity: 0;
+    transform: translateY(20px);
   }
 }
 
@@ -1211,17 +1206,18 @@ html.locked {
   box-shadow: var(--md-shadow-3);
   font: 400 0.875rem/1.25rem var(--md-font);
   letter-spacing: 0.0125rem;
-  animation: snackbar-in var(--md-default-spatial), fade-in var(--md-default-effects);
+  animation: snackbar-in var(--md-fast-spatial), fade-in var(--md-fast-effects);
 }
 
 .snackbar.leaving {
   opacity: 0;
-  transition: opacity var(--md-default-effects);
+  transform: scale(0.8);
+  transition: opacity var(--md-fast-effects), transform var(--md-fast-spatial);
 }
 
 @keyframes snackbar-in {
   from {
-    transform: translateY(24px);
+    transform: scale(0.8);
   }
 }
 
@@ -1272,14 +1268,15 @@ html.locked {
 }
 
 :root[data-nav]::view-transition-old(root) {
-  animation: shared-axis-out var(--md-default-spatial) both, fade-out var(--md-fast-effects) both;
+  animation: shared-axis-out var(--spring-medium-low) both, fade-out 90ms linear 50ms both;
 }
 
 :root[data-nav]::view-transition-new(root) {
-  animation: shared-axis-in var(--md-default-spatial) both, fade-in var(--md-default-effects) 60ms both;
+  animation: shared-axis-in var(--spring-medium-low) both, fade-in 90ms linear 50ms both;
 }
 
 :root[data-nav="pop"]::view-transition-old(root) {
+  z-index: 1;
   animation-name: shared-axis-back-out, fade-out;
 }
 
@@ -1288,11 +1285,11 @@ html.locked {
 }
 
 :root[data-nav="tab"]::view-transition-old(root) {
-  animation: fade-out var(--md-fast-effects) both;
+  animation: fade-out 90ms linear both, scale-out var(--spring-medium-low) both;
 }
 
 :root[data-nav="tab"]::view-transition-new(root) {
-  animation: fade-in var(--md-default-effects) 149ms both;
+  animation: fade-in 210ms linear 90ms both, scale-in var(--spring-medium-low) both;
 }
 
 :root[data-nav="tab"]::view-transition-old(navbar) {
@@ -1305,25 +1302,37 @@ html.locked {
 
 @keyframes shared-axis-out {
   to {
-    transform: translateX(-30px);
+    transform: translateX(-20%);
   }
 }
 
 @keyframes shared-axis-in {
   from {
-    transform: translateX(30px);
+    transform: translateX(20%);
   }
 }
 
 @keyframes shared-axis-back-out {
   to {
-    transform: translateX(30px);
+    transform: translateX(20%);
   }
 }
 
 @keyframes shared-axis-back-in {
   from {
-    transform: translateX(-30px);
+    transform: translateX(-20%);
+  }
+}
+
+@keyframes scale-in {
+  from {
+    transform: scale(0.8);
+  }
+}
+
+@keyframes scale-out {
+  to {
+    transform: scale(1.05);
   }
 }
 
@@ -1363,25 +1372,13 @@ html.locked {
   min-width: 200px;
   max-width: min(280px, calc(100% - 32px));
   filter: drop-shadow(0 1px 2px rgb(0 0 0 / 0.3)) drop-shadow(0 2px 6px rgb(0 0 0 / 0.15));
-  transform-origin: top right;
-  animation: menu-in var(--md-default-spatial), fade-in var(--md-fast-effects);
-  transition: opacity var(--md-fast-effects);
-}
-
-.menu.from-left {
-  transform-origin: top left;
-}
-
-.menu.from-bottom {
-  transform-origin: bottom right;
-}
-
-.menu.from-bottom.from-left {
-  transform-origin: bottom left;
+  animation: menu-in var(--md-fast-spatial), fade-in var(--md-fast-effects);
+  transition: opacity var(--md-fast-effects), transform var(--md-fast-spatial);
 }
 
 .menu-backdrop.closing .menu {
   opacity: 0;
+  transform: scale(0.8);
 }
 
 @keyframes menu-in {

@@ -1,4 +1,4 @@
-const VERSION = "v66";
+const VERSION = "v67";
 const CACHE = `news-${VERSION}`;
 
 const SHELL = [
@@ -7,6 +7,7 @@ const SHELL = [
   "/app/styles.css",
   "/app/main.js",
   "/app/dom.js",
+  "/app/shapes.js",
   "/app/shell.js",
   "/app/store.js",
   "/app/storage.js",

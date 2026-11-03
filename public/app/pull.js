@@ -1,9 +1,8 @@
-import { loadingIndicator } from "./dom.js";
+import { el, loadingIndicator } from "./dom.js";
 
 const THRESHOLD = 80;
 const DRAG = 0.5;
 const SIZE = 48;
-const REST = 16;
 
 let key = null;
 let handler = null;
@@ -11,16 +10,11 @@ let start = null;
 let fraction = 0;
 let busy = false;
 let run = 0;
-let indicator = null;
+let spinner = null;
 
-function build() {
-  if (indicator) return indicator;
-  indicator = loadingIndicator({ contained: true, determinate: true });
-  indicator.classList.add("pull");
-  indicator.ariaHidden = "true";
-  document.body.append(indicator);
-  return indicator;
-}
+const pulled = loadingIndicator({ contained: true, progress: 0 });
+const box = el("div", { class: "pull", ariaHidden: "true" }, pulled);
+document.getElementById("app").append(box);
 
 function offsetFor(value) {
   const over = Math.min(2, Math.max(0, value - 1));
@@ -28,10 +22,23 @@ function offsetFor(value) {
 }
 
 function place(distance, animate) {
-  const node = build();
-  node.classList.toggle("settling", animate);
-  node.classList.toggle("shown", distance > 0);
-  node.style.transform = `translateY(${distance - SIZE}px)`;
+  box.classList.toggle("settling", animate);
+  box.style.transform = `translateY(${distance - SIZE}px)`;
+}
+
+function show(distance) {
+  place(distance, false);
+  pulled.progress(distance / THRESHOLD);
+  pulled.style.rotate = `${-Math.max(0, distance / THRESHOLD - 1) * 180}deg`;
+}
+
+function idle() {
+  box.classList.remove("refreshing");
+  setTimeout(() => {
+    if (busy || !spinner) return;
+    spinner.remove();
+    spinner = null;
+  }, 500);
 }
 
 function reset() {
@@ -43,16 +50,18 @@ function finish(mine) {
   if (mine !== run) return;
   busy = false;
   place(0, true);
-  setTimeout(() => {
-    if (!busy) indicator.stop();
-  }, 500);
+  idle();
 }
 
 function refresh() {
   busy = true;
   const mine = ++run;
-  place(REST + SIZE, true);
-  indicator.spin();
+  place(THRESHOLD, true);
+  if (!spinner) {
+    spinner = loadingIndicator({ contained: true });
+    box.append(spinner);
+  }
+  box.classList.add("refreshing");
   Promise.resolve()
     .then(() => handler?.())
     .catch(() => {})
@@ -83,8 +92,7 @@ addEventListener(
       return reset();
     }
     fraction = Math.max(0, dy * DRAG) / THRESHOLD;
-    build().progress(fraction);
-    place(offsetFor(fraction), false);
+    show(offsetFor(fraction));
   },
   { passive: true }
 );
@@ -102,7 +110,6 @@ addEventListener("touchcancel", release, { passive: true });
 
 export function refreshNow() {
   if (!key || busy) return;
-  build();
   refresh();
 }
 
@@ -111,10 +118,8 @@ export function setPull(next, refreshFeed) {
     run += 1;
     busy = false;
     reset();
-    if (indicator) {
-      indicator.stop();
-      place(0, false);
-    }
+    place(0, false);
+    idle();
   }
   key = next;
   handler = next ? refreshFeed : null;

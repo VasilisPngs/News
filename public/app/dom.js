@@ -1,4 +1,5 @@
 import { t } from "./i18n.js";
+import { DETERMINATE, INDETERMINATE } from "./shapes.js";
 
 export function el(tag, props = {}, children = []) {
   const node = document.createElement(tag);
@@ -56,6 +57,46 @@ export function icon(name, label) {
 export const iconButton = (name, label, onClick, props = {}) => el("button", { class: "icon-btn", type: "button", ariaLabel: label, onclick: onClick, ...props }, icon(name));
 
 export const glide = () => (matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth");
+
+const PRESSABLE = ".icon-btn, .btn, .chip, .list-item.action, label.list-item, .menu-item, .nav-item, .article-link, .manage > .grow";
+const TOUCH_SLOP = 8;
+
+function ripple(host, x, y) {
+  const layer = host.querySelector(":scope > .ripple") || host.appendChild(el("span", { class: "ripple" }));
+  const box = layer.getBoundingClientRect();
+  const radius = Math.hypot(box.width, box.height) / 2 + 10;
+  const timing = (duration, easing = "linear") => ({ duration: matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : duration, easing, fill: "forwards" });
+  const wave = layer.appendChild(el("span", { style: `width: ${radius * 2}px; height: ${radius * 2}px` }));
+  const grow = wave.animate({ scale: [(Math.max(box.width, box.height) * 0.3) / radius, 1] }, timing(225, "cubic-bezier(0.4, 0, 0.2, 1)"));
+  wave.animate({ translate: [`${x - box.left - radius}px ${y - box.top - radius}px`, `${box.width / 2 - radius}px ${box.height / 2 - radius}px`] }, timing(225));
+  const appear = wave.animate({ opacity: [0, 0.1] }, timing(75));
+  return () => {
+    appear.finish();
+    grow.finished.then(() => wave.animate({ opacity: [0.1, 0] }, timing(150)).finished).then(() => wave.remove());
+  };
+}
+
+addEventListener("pointerdown", (event) => {
+  const target = event.button ? null : event.target.closest(PRESSABLE);
+  if (!target || target.matches(":disabled")) return;
+  const host = target.matches(".nav-item") ? target.querySelector(".nav-indicator") : target.matches(".manage > .grow, .article-link") ? target.parentElement : target;
+  const stop = new AbortController();
+  let release = null;
+  let timer = 0;
+  const start = () => (release ??= ripple(host, event.clientX, event.clientY));
+  const end = (pressed) => {
+    stop.abort();
+    clearTimeout(timer);
+    if (pressed) start();
+    release?.();
+  };
+  const own = (handler) => (other) => other.pointerId === event.pointerId && handler(other);
+  addEventListener("pointerup", own(() => end(true)), { signal: stop.signal });
+  addEventListener("pointercancel", own(() => end(false)), { signal: stop.signal });
+  addEventListener("pointermove", own((other) => Math.hypot(other.clientX - event.clientX, other.clientY - event.clientY) > TOUCH_SLOP && end(false)), { signal: stop.signal });
+  if (event.pointerType === "touch" && host.closest(".view")) timer = setTimeout(start, 100);
+  else start();
+});
 
 const FOCUSABLE = "button:not(:disabled), a[href]:not([role=tab]), input:not(:disabled), textarea";
 
@@ -139,28 +180,10 @@ export function startArrowKeys() {
   });
 }
 
-const TAU = Math.PI * 2;
-const POINTS = 96;
-const SIZE = 48;
-const RADIUS = 19;
 const MORPH_MS = 650;
+const SPRING_MS = 297;
 const TURN_MS = 4666;
-
-const wave = (count, depth, power) => (angle) => 1 - depth * ((1 - Math.cos(count * angle)) / 2) ** power;
-const polygon = (count, round) => (angle) => {
-  const step = TAU / count;
-  const local = (((angle % step) + step) % step) - step / 2;
-  const radius = Math.cos(Math.PI / count) / Math.cos(local);
-  return radius + (1 - radius) * round;
-};
-const oval = (ratio, power, tilt) => (angle) => {
-  const x = Math.abs(Math.cos(angle - tilt));
-  const y = Math.abs(Math.sin(angle - tilt)) / ratio;
-  return (x ** power + y ** power) ** (-1 / power);
-};
-const circle = () => 1;
-
-const SEQUENCE = [wave(10, 0.3, 0.6), wave(9, 0.12, 1.6), polygon(5, 0.2), oval(0.58, 3.2, Math.PI / 4), wave(8, 0.14, 0.7), wave(4, 0.2, 1.8), oval(0.72, 2, -Math.PI / 4)];
+const SCALE = 0.038;
 
 function settle(seconds) {
   const omega = Math.sqrt(200);
@@ -169,55 +192,50 @@ function settle(seconds) {
   return 1 - Math.exp(-decay * seconds) * (Math.cos(damped * seconds) + (decay / damped) * Math.sin(damped * seconds));
 }
 
-function outline(from, to, progress, turn) {
-  let d = "";
-  for (let index = 0; index < POINTS; index += 1) {
-    const angle = (index / POINTS) * TAU;
-    const radius = RADIUS * Math.max(0, from(angle) + (to(angle) - from(angle)) * progress);
-    const x = SIZE / 2 + radius * Math.cos(angle + turn);
-    const y = SIZE / 2 + radius * Math.sin(angle + turn);
-    d += `${index ? "L" : "M"}${x.toFixed(2)} ${y.toFixed(2)}`;
+function morph(path, pairs, progress, rotation) {
+  const points = [];
+  for (let index = 0; index < pairs.length; index += 12) {
+    for (let offset = index; offset < index + 6; offset += 1) points.push(Math.round(pairs[offset] + (pairs[offset + 6] - pairs[offset]) * progress));
   }
-  return `${d}Z`;
+  const xs = points.filter((_, index) => index % 2 === 0);
+  const ys = points.filter((_, index) => index % 2 === 1);
+  let d = `M${points[0]} ${points[1]}`;
+  for (let index = 0; index < points.length; index += 6) {
+    const next = (index + 6) % points.length;
+    d += `C${points.slice(index + 2, index + 6).join(" ")} ${points[next]} ${points[next + 1]}`;
+  }
+  path.setAttribute("d", `${d}Z`);
+  path.setAttribute("transform", `rotate(${rotation} 24 24) translate(${24 - ((Math.min(...xs) + Math.max(...xs)) * SCALE) / 2} ${24 - ((Math.min(...ys) + Math.max(...ys)) * SCALE) / 2}) scale(${SCALE})`);
 }
 
-export function loadingIndicator({ contained = false, determinate = false } = {}) {
+export function loadingIndicator({ contained = false, progress = null } = {}) {
   const path = svg("path");
-  const node = el("div", { class: contained ? "loading-indicator contained" : "loading-indicator", role: "progressbar", ariaLabel: t("loading") }, svg("svg", { viewBox: `0 0 ${SIZE} ${SIZE}` }, path));
-  let frame = 0;
+  const node = el("div", { class: contained ? "loading-indicator contained" : "loading-indicator", role: "progressbar", ariaLabel: t("loading") }, svg("svg", { viewBox: "0 0 48 48" }, path));
+  if (progress !== null) {
+    node.progress = (value) => {
+      const amount = Math.min(1, Math.max(0, value));
+      morph(path, DETERMINATE, amount, -amount * 180);
+    };
+    node.progress(progress);
+    return node;
+  }
   let started = 0;
   const draw = (now) => {
-    frame = 0;
     if (!node.isConnected && started) return;
-    if (!started) started = now;
+    started ||= now;
     const elapsed = now - started;
     const step = Math.floor(elapsed / MORPH_MS);
-    const progress = settle((elapsed % MORPH_MS) / 1000);
-    const turn = ((step + progress) * TAU) / 4 + (elapsed / TURN_MS) * TAU;
-    path.setAttribute("d", outline(SEQUENCE[step % SEQUENCE.length], SEQUENCE[(step + 1) % SEQUENCE.length], progress, turn));
-    frame = requestAnimationFrame(draw);
+    const time = elapsed % MORPH_MS;
+    const amount = time < SPRING_MS ? settle(time / 1000) : 1;
+    morph(path, INDETERMINATE[step % INDETERMINATE.length], amount, (step + amount + 1) * 90 + ((elapsed % TURN_MS) / TURN_MS) * 360);
+    requestAnimationFrame(draw);
   };
-  node.progress = (value) => {
-    const amount = Math.min(1, Math.max(0, value));
-    path.setAttribute("d", outline(circle, SEQUENCE[0], amount, (-amount * Math.PI) + Math.PI / 10));
-  };
-  node.spin = () => {
-    if (frame) return;
-    started = 0;
-    frame = requestAnimationFrame(draw);
-  };
-  node.stop = () => {
-    cancelAnimationFrame(frame);
-    frame = 0;
-  };
-  if (determinate) node.progress(0);
-  else node.spin();
+  requestAnimationFrame(draw);
   return node;
 }
 
 export const loading = () => el("div", { class: "loading" }, loadingIndicator());
 
-const TOUCH_SLOP = 8;
 
 export function sortable(list, onSort) {
   let dragged = null;
@@ -493,7 +511,7 @@ function openDialog(build, onClose, role = null) {
       dialog.remove();
     };
     dialog.addEventListener("transitionend", (event) => {
-      if (event.target === dialog) finish();
+      if (event.target === dialog && !event.pseudoElement) finish();
     });
     setTimeout(finish, 400);
     if (!host.querySelector(".dialog:not(.closing)")) unlockPage(app);
@@ -643,12 +661,9 @@ function popMenu(anchor, sections) {
   };
   const menu = el("div", { class: "menu", role: "menu" }, sections.map((items) => el("div", { class: "menu-section", role: "none" }, items.map((item) => menuItem(item, close)))));
   const width = document.documentElement.clientWidth;
-  if (box.left + box.width / 2 < width / 2) {
-    menu.style.left = `${box.left}px`;
-    menu.classList.add("from-left");
-  } else {
-    menu.style.right = `${width - box.right}px`;
-  }
+  const left = box.left + box.width / 2 < width / 2;
+  if (left) menu.style.left = `${box.left}px`;
+  else menu.style.right = `${width - box.right}px`;
   dialog.append(menu);
   dialog.addEventListener("cancel", (event) => {
     event.preventDefault();
@@ -675,10 +690,9 @@ function popMenu(anchor, sections) {
   ((keyboard && menu.querySelector(".menu-item:not(:disabled)")) || dialog).focus();
   const below = innerHeight - rootLength("--navbar") - 8 - box.bottom;
   const above = box.top - rootLength("--topbar") - 8;
-  if (menu.offsetHeight > below && above > below) {
-    menu.style.bottom = `${innerHeight - box.top + 4}px`;
-    menu.classList.add("from-bottom");
-  } else {
-    menu.style.top = `${box.bottom + 4}px`;
-  }
+  const flip = menu.offsetHeight > below && above > below;
+  if (flip) menu.style.bottom = `${innerHeight - box.top + 4}px`;
+  else menu.style.top = `${box.bottom + 4}px`;
+  const span = Math.min(box.width, menu.offsetWidth) / 2;
+  menu.style.transformOrigin = `${left ? span : menu.offsetWidth - span}px ${flip ? "100%" : "0"}`;
 }
