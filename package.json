@@ -8,7 +8,7 @@
     "test": "node --test test/*.test.mjs"
   },
   "devDependencies": {
-    "wrangler": "4.156.1"
+    "wrangler": "4.156.2"
   },
   "packageManager": "npm@12.2.1",
   "allowScripts": {
