@@ -1,4 +1,4 @@
-const VERSION = "v67";
+const VERSION = "v68";
 const CACHE = `news-${VERSION}`;
 
 const SHELL = [
@@ -36,7 +36,7 @@ self.addEventListener("install", (event) => {
     { condition: { urlPattern: "/?" }, source: { cacheName: CACHE } }
   ]);
   event.waitUntil(
-    caches.open(CACHE).then((cache) => cache.addAll(SHELL.map((path) => new Request(path, { cache: "reload" }))))
+    caches.open(CACHE).then((cache) => cache.addAll(SHELL.map((path) => new Request(path, { cache: "no-cache" }))))
   );
 });
 
