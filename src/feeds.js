@@ -20,27 +20,43 @@ function entities(value) {
   });
 }
 
+function upTo(text, end) {
+  const at = text.lastIndexOf(end);
+  return at < 0 ? "" : text.slice(0, at + end.length);
+}
+
+function uncdata(text) {
+  const head = upTo(text, "]]>");
+  return head.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1") + text.slice(head.length);
+}
+
 function clean(value) {
   if (!value) return "";
-  const raw = value.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1");
-  return entities(entities(raw).replace(/<[^>]*>/g, " ")).replace(/\s+/g, " ").trim();
+  const text = entities(uncdata(value));
+  const tagged = upTo(text, ">");
+  return entities(tagged.replace(/<[^>]*>/g, " ") + text.slice(tagged.length)).replace(/\s+/g, " ").trim();
 }
 
-const escape = (name) => name.replace(":", "\\:");
-
-function tag(block, name) {
-  const match = block.match(new RegExp(`<${escape(name)}(?:\\s[^>]*)?>([\\s\\S]*?)</${escape(name)}>`, "i"));
-  return match ? match[1] : "";
+function blocks(text, name) {
+  const open = new RegExp(`<${name}(?=[\\s>])`, "gi");
+  const close = new RegExp(`</${name}>`, "gi");
+  const found = [];
+  for (let match = open.exec(text); match; match = open.exec(text)) {
+    const start = text.indexOf(">", match.index) + 1;
+    close.lastIndex = start;
+    const end = start ? close.exec(text) : null;
+    if (!end) break;
+    found.push(text.slice(start, end.index));
+    open.lastIndex = close.lastIndex;
+  }
+  return found;
 }
+
+const tag = (block, name) => blocks(block, name)[0] ?? "";
 
 function attribute(element, name) {
   const match = element.match(new RegExp(`\\s${name}\\s*=\\s*("([^"]*)"|'([^']*)')`, "i"));
   return match ? entities(match[2] ?? match[3] ?? "") : "";
-}
-
-function blocks(text, name) {
-  const pattern = new RegExp(`<${name}(?:\\s[^>]*)?>([\\s\\S]*?)</${name}>`, "gi");
-  return Array.from(text.matchAll(pattern), (match) => match[1]);
 }
 
 function absolute(link, base) {
@@ -58,7 +74,7 @@ function time(value, fallback) {
 }
 
 function atomLink(entry) {
-  const links = entry.match(/<link\b[^>]*>/gi) || [];
+  const links = upTo(entry, ">").match(/<link\b[^>]*>/gi) || [];
   const preferred = links.find((link) => !/\srel\s*=/i.test(link) || /\srel\s*=\s*["']alternate["']/i.test(link));
   return attribute(preferred || links[0] || "", "href");
 }
@@ -80,20 +96,21 @@ function fromSrcset(srcset) {
 
 function image(block, base) {
   const candidates = [];
-  for (const element of block.match(/<media:(content|thumbnail)\b[^>]*>/gi) || []) {
+  const tags = upTo(block, ">");
+  for (const element of tags.match(/<media:(content|thumbnail)\b[^>]*>/gi) || []) {
     const url = attribute(element, "url");
     const media = /^<media:content/i.test(element) && !(attribute(element, "medium") === "image" || attribute(element, "type").startsWith("image/") || IMAGE_EXT.test(url));
     if (url && !media) candidates.push({ url, width: parseInt(attribute(element, "width"), 10) || 0 });
   }
-  for (const element of block.match(/<(enclosure|link)\b[^>]*>/gi) || []) {
+  for (const element of tags.match(/<(enclosure|link)\b[^>]*>/gi) || []) {
     const url = attribute(element, "url") || attribute(element, "href");
     if (url && /^image\//i.test(attribute(element, "type"))) candidates.push({ url, width: 0 });
   }
   let picked = smallest(candidates);
   if (!picked) {
-    const raw = (tag(block, "content:encoded") || tag(block, "description") || tag(block, "content") || tag(block, "summary")).replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1");
+    const raw = uncdata(tag(block, "content:encoded") || tag(block, "description") || tag(block, "content") || tag(block, "summary"));
     const markup = raw.includes("&lt;") ? entities(raw) : raw;
-    for (const element of markup.match(/<img\b[^>]*>/gi) || []) {
+    for (const element of upTo(markup, ">").match(/<img\b[^>]*>/gi) || []) {
       if (attribute(element, "width") === "1" || attribute(element, "height") === "1") continue;
       picked = fromSrcset(attribute(element, "srcset")) || attribute(element, "src") || attribute(element, "data-src");
       if (picked) break;
@@ -115,8 +132,7 @@ export function parseFeed(text, base, now = Date.now()) {
   const newest = new Set(entries.toSorted((a, b) => b.published - a.published).slice(0, MAX_ITEMS));
   const items = [];
   for (const { block, published } of entries.filter((entry) => newest.has(entry))) {
-    const source = block.match(/<source\b[^>]*>([\s\S]*?)<\/source>/i);
-    const sourceName = source ? clean(source[1]) : "";
+    const sourceName = clean(tag(block, "source"));
     let heading = clean(tag(block, "title"));
     if (sourceName && heading.endsWith(` - ${sourceName}`)) heading = heading.slice(0, -sourceName.length - 3).trim();
     const link = absolute(atom ? atomLink(block) : clean(tag(block, "link")) || clean(tag(block, "guid")), base);
@@ -166,7 +182,7 @@ const headOf = (html) => html.slice(0, Math.max(html.search(/<\/head>/i), 0) || 
 
 function alternates(html, base) {
   const found = [];
-  for (const element of headOf(html).match(/<link\b[^>]*>/gi) || []) {
+  for (const element of upTo(headOf(html), ">").match(/<link\b[^>]*>/gi) || []) {
     if (!/\srel\s*=\s*["']?[^"'>]*alternate/i.test(element) || !FEED_TYPES.test(attribute(element, "type"))) continue;
     const href = absolute(attribute(element, "href"), base);
     if (href) found.push(href);
@@ -176,7 +192,7 @@ function alternates(html, base) {
 
 function pickIcon(html, base) {
   const found = [];
-  for (const element of headOf(html).match(/<link\b[^>]*>/gi) || []) {
+  for (const element of upTo(headOf(html), ">").match(/<link\b[^>]*>/gi) || []) {
     const rel = attribute(element, "rel").toLowerCase();
     const href = ICON_REL.test(rel) ? absolute(attribute(element, "href"), base) : "";
     if (href) found.push({ href, size: parseInt(attribute(element, "sizes"), 10) || (rel.startsWith("apple") ? 180 : 0) });
@@ -193,7 +209,7 @@ export async function pageImage(url) {
   try {
     const page = await download(url);
     if (page.status !== 200) return "";
-    for (const element of headOf(page.text).match(/<meta\b[^>]*>/gi) || []) {
+    for (const element of upTo(headOf(page.text), ">").match(/<meta\b[^>]*>/gi) || []) {
       if (!PAGE_IMAGE.test(element)) continue;
       const found = absolute(attribute(element, "content"), page.url).replace(/^http:/, "https:");
       if (found && found.length <= 1000) return found;
@@ -219,7 +235,7 @@ export function normalizeSite(input) {
 
 function siteName(html) {
   const head = html.slice(0, 200000);
-  for (const element of head.match(/<meta\b[^>]*>/gi) || []) {
+  for (const element of upTo(head, ">").match(/<meta\b[^>]*>/gi) || []) {
     if (/\s(property|name)\s*=\s*["']og:site_name["']/i.test(element)) return clean(attribute(element, "content"));
   }
   return "";

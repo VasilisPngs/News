@@ -183,3 +183,24 @@ test("without a linked feed the common paths are tried, and a site without one i
   assert.equal(await discover("none.example"), null);
   assert.equal(await discover("not a url at all"), null);
 });
+
+test("hostile feeds and pages are parsed in time that grows only with their size", async () => {
+  const head = "<rss><channel><title>T</title><link>https://a.example/</link>";
+  const feeds = [
+    head + "<item>".repeat(40000),
+    head + "<item ".repeat(40000) + "</item>",
+    '<feed xmlns="http://www.w3.org/2005/Atom"><title>T</title>' + "<entry>".repeat(40000),
+    `${head}<item><title>${"&lt;".repeat(60000)}</title><link>https://a.example/1</link></item>`,
+    `${head}<item><title>${"<![CDATA[".repeat(30000)}</title><link>https://a.example/2</link></item>`,
+    `${head}<item><title>Pic</title><link>https://a.example/3</link>${"<media:content ".repeat(30000)}${"<description>".repeat(30000)}</item>`
+  ];
+  for (const text of feeds) {
+    const started = performance.now();
+    parseFeed(text, "https://a.example/rss", NOW);
+    assert.ok(performance.now() - started < 250);
+  }
+  network([["https://a.example/page", () => new Response(`<html><head>${"<meta ".repeat(40000)}</head></html>`)]]);
+  const started = performance.now();
+  assert.equal(await pageImage("https://a.example/page"), "");
+  assert.ok(performance.now() - started < 250);
+});
