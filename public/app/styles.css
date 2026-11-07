@@ -1078,7 +1078,7 @@ html.locked {
   color: var(--md-on-surface);
   outline: none;
   text-overflow: ellipsis;
-  transition: border-color var(--md-fast-effects), box-shadow var(--md-fast-effects);
+  transition: border-color var(--md-fast-effects), box-shadow var(--md-fast-spatial);
 }
 
 .field input:focus {
@@ -1116,7 +1116,7 @@ html.locked {
   pointer-events: none;
   transform: translateY(-50%);
   transform-origin: left center;
-  transition: top var(--md-fast-effects), transform var(--md-fast-effects), color var(--md-fast-effects);
+  transition: top var(--md-fast-spatial), transform var(--md-fast-spatial), color var(--md-fast-effects);
 }
 
 .field input:focus + span,
