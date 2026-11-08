@@ -38,10 +38,13 @@ function sourceIcon(article) {
   return picture(`icon:${article.id}`, article.icon, { class: "source-icon" });
 }
 
+function source(article) {
+  if (!article.source) return null;
+  return el("span", { class: "supporting article-source" }, [sourceIcon(article), el("span", { text: article.source })]);
+}
+
 function meta(article) {
-  const details = [ago(article.published), article.coverage > 1 ? tn(article.coverage, "source") : null].filter(Boolean).join(" · ");
-  const byline = article.source ? [el("span", { text: article.source }), el("span", { text: ` · ${details}` })] : el("span", { text: details });
-  return el("span", { class: "supporting article-meta" }, [sourceIcon(article), el("span", { class: "byline" }, byline)]);
+  return el("span", { class: "supporting article-meta", text: [ago(article.published), article.coverage > 1 ? tn(article.coverage, "source") : null].filter(Boolean).join(" · ") });
 }
 
 async function act(article, action) {
@@ -65,6 +68,7 @@ function articleRow(article, mode) {
   const content = el("div", { class: article.opened ? "list-item article read" : "list-item article", "data-id": article.id });
   content.append(
     el("a", { class: "article-link grow", href: article.url, target: "_blank", rel: "noopener noreferrer", onclick: () => markOpened(article) }, [
+      source(article),
       el("span", { class: "article-title", text: article.title }),
       meta(article),
       thumbnail(article, content)

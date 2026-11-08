@@ -601,8 +601,10 @@ label.list-item {
 
 .article {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 80px;
+  grid-template-columns: minmax(0, 1fr) 96px;
+  grid-template-rows: auto 1fr auto;
   grid-template-areas:
+    "source source"
     "title title"
     "meta save";
   align-items: center;
@@ -612,6 +614,7 @@ label.list-item {
 
 .article.with-image {
   grid-template-areas:
+    "source image"
     "title image"
     "meta save";
 }
@@ -637,27 +640,27 @@ label.list-item {
   color: var(--md-on-surface-variant);
 }
 
-.article-meta {
-  grid-area: meta;
+.article-source {
+  grid-area: source;
   display: flex;
   align-items: center;
   gap: 8px;
   min-width: 0;
+  margin-bottom: 4px;
 }
 
-.byline {
-  display: flex;
-  min-width: 0;
-  white-space: pre;
-}
-
-.byline > :first-child {
+.article-source > span {
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.byline > :last-child {
-  flex: none;
+.article-meta {
+  grid-area: meta;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .source-icon {
@@ -672,14 +675,13 @@ label.list-item {
   grid-area: save;
   display: flex;
   justify-content: flex-end;
-  margin-inline: -8px;
 }
 
 .article-image {
   grid-area: image;
   align-self: start;
-  width: 80px;
-  height: 80px;
+  width: 96px;
+  height: 96px;
   border-radius: 12px;
   object-fit: cover;
   background: var(--md-surface-container-highest);

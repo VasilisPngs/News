@@ -335,7 +335,7 @@ test("source articles carry their picture, and older ones get it filled in on th
   assert.equal(rows(env, "SELECT image FROM articles")[0].image, "https://pics.example/1.jpg");
 });
 
-test("serves an article's picture as a 240 px square resized by Cloudflare, and the original when resizing fails", async () => {
+test("serves an article's picture as a 288 px square resized by Cloudflare, and the original when resizing fails", async () => {
   const env = environment();
   const now = Date.now();
   network([
@@ -358,7 +358,7 @@ test("serves an article's picture as a 240 px square resized by Cloudflare, and 
   assert.equal(await served.text(), "small");
   assert.equal(served.headers.get("content-type"), "image/avif");
   assert.equal(served.headers.get("cache-control"), "private, max-age=1209600, immutable");
-  assert.deepEqual(asked[0], { url: "https://pics.example/1.jpg", image: { width: 240, height: 240, fit: "cover", format: "avif" } });
+  assert.deepEqual(asked[0], { url: "https://pics.example/1.jpg", image: { width: 288, height: 288, fit: "cover", format: "avif" } });
   await picture("image/webp,*/*");
   assert.equal(asked[1].image.format, "webp");
   await picture("*/*");
