@@ -671,7 +671,8 @@ label.list-item {
 .article-actions {
   grid-area: save;
   display: flex;
-  justify-content: center;
+  justify-content: flex-end;
+  margin-inline: -8px;
 }
 
 .article-image {
