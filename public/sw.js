@@ -1,4 +1,4 @@
-const VERSION = "v69";
+const VERSION = "v70";
 const CACHE = `news-${VERSION}`;
 
 const SHELL = [
