@@ -608,8 +608,8 @@ label.list-item {
     "title title"
     "meta save";
   align-items: center;
-  column-gap: 16px;
-  padding: 12px 16px 0;
+  gap: 0 12px;
+  padding: 10px 16px 0;
 }
 
 .article.with-image {
@@ -646,7 +646,8 @@ label.list-item {
   align-items: center;
   gap: 8px;
   min-width: 0;
-  margin-bottom: 4px;
+  font: 500 0.6875rem/1rem var(--md-font);
+  letter-spacing: 0.031rem;
 }
 
 .article-source > span {

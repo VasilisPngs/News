@@ -140,9 +140,11 @@ export function dayLabel(timestamp) {
 }
 
 export function ago(timestamp) {
-  const minutes = Math.max(0, Math.round((Date.now() - timestamp) / 60000));
-  const relative = formatter(Intl.RelativeTimeFormat, { numeric: "auto", style: "short" });
-  if (minutes < 60) return relative.format(-minutes, "minute");
-  if (minutes < 1440) return relative.format(-Math.round(minutes / 60), "hour");
-  return formatter(Intl.DateTimeFormat, { day: "numeric", month: "short" }).format(timestamp);
+  const now = Date.now();
+  const minutes = Math.max(0, Math.floor((now - timestamp) / 60000));
+  if (minutes < 60) return formatter(Intl.RelativeTimeFormat).format(-minutes, "minute");
+  if (minutes < 1440) return formatter(Intl.RelativeTimeFormat).format(-Math.floor(minutes / 60), "hour");
+  const days = daysBetween(timestamp, now);
+  if (days < 7) return formatter(Intl.RelativeTimeFormat, { numeric: "auto" }).format(-days, "day");
+  return formatter(Intl.DateTimeFormat, { day: "numeric", month: "short", year: "numeric" }).format(timestamp);
 }
