@@ -1,5 +1,5 @@
 import { el, iconButton, swipeAction, snackbar } from "../dom.js";
-import { t, tn, ago } from "../i18n.js";
+import { t, ago } from "../i18n.js";
 import { markOpened, articleAction } from "../store.js";
 
 const PICTURE_LIMIT = 300;
@@ -44,7 +44,7 @@ function source(article) {
 }
 
 function meta(article) {
-  return el("span", { class: "supporting article-meta", text: [ago(article.published), article.coverage > 1 ? tn(article.coverage, "source") : null].filter(Boolean).join(" · ") });
+  return el("span", { class: "supporting article-meta", text: ago(article.published) });
 }
 
 async function act(article, action) {

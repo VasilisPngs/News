@@ -294,7 +294,6 @@ const item = (row) => ({
   published: row.published_at,
   opened: Boolean(row.opened_at),
   saved: Boolean(row.saved_at),
-  coverage: row.coverage || 1,
   image: row.image ? `/api/image/${row.id}` : null,
   icon: row.icon || null
 });
@@ -689,21 +688,21 @@ export async function notify(env, now, touched) {
   if (covered.results.length === 0) return null;
   const bar = await threshold(env, now);
   let best = null;
-  for (const { story, coverage } of covered.results) {
+  for (const { story } of covered.results) {
     const lead = await env.DB.prepare(
       "SELECT a.id, a.title, COALESCE(s.title, a.source) AS source, a.affinity, a.published_at FROM articles a LEFT JOIN sources s ON s.id = a.owner WHERE a.story = ?1 AND a.vector IS NOT NULL ORDER BY a.affinity DESC LIMIT 1"
     )
       .bind(story)
       .first();
     if (!lead || lead.affinity < bar || now - lead.published_at > NOTIFY_FRESH_MS) continue;
-    if (!best || lead.affinity > best.lead.affinity) best = { story, coverage, lead };
+    if (!best || lead.affinity > best.lead.affinity) best = { story, lead };
   }
   if (!best) return null;
   const [jwk, origin] = await Promise.all([vapidKey(env), getMeta(env, "origin")]);
   if (!origin) return null;
   const notification = {
     title: best.lead.title,
-    body: `${best.lead.source} · ${best.coverage} πηγές`,
+    body: best.lead.source,
     lang: "el",
     tag: best.story,
     navigate: `${origin}/`,

@@ -96,10 +96,6 @@ export const CATEGORIES = [
   "Ταξίδια"
 ];
 
-const PLURALS = {
-  source: ["πηγή", "πηγές"]
-};
-
 const LOCALE = "el-GR";
 
 const formatters = new Map();
@@ -117,10 +113,6 @@ export function t(key, params) {
   if (!params) return value;
   return value.replace(/\{(\w+)\}/g, (match, name) => (params[name] === undefined ? match : String(params[name])));
 }
-
-const isOne = (count) => formatter(Intl.PluralRules).select(count) === "one";
-
-export const tn = (count, key) => `${formatter(Intl.NumberFormat).format(count)} ${PLURALS[key][isOne(count) ? 0 : 1]}`;
 
 export function dayStart(time) {
   const day = new Date(time);

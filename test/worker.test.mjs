@@ -72,8 +72,7 @@ test("For You picks from the sites the AI found for your topics, grouped by stor
   const items = await forYou(env);
   assert.equal(items.length, 4);
   assert.ok(!items.some((item) => item.title.startsWith("Καιρός")));
-  const story = items.find((item) => item.coverage === 2);
-  assert.match(story.title, /Λεβαντόφσκι/);
+  const story = items.find((item) => /Λεβαντόφσκι/.test(item.title));
   assert.equal(story.source, "Gazzetta");
   assert.equal(story.opened, false);
   assert.equal(items[0].title, PEDRI);
@@ -170,13 +169,13 @@ test("opening, saving and Suggest Less shape the feed and the profile", async ()
   const env = pooled();
   await setup(env);
   const items = await forYou(env);
-  const story = items.find((item) => item.coverage === 2);
+  const story = items.find((item) => /Λεβαντόφσκι/.test(item.title));
   const other = items.find((item) => item.title === PEDRI);
   assert.equal((await api(worker, env, "/api/article", { id: story.id, action: "open" })).status, 200);
   assert.ok(rows(env, "SELECT value FROM meta WHERE key = 'profile'")[0].value.length > 1000);
   assert.equal((await api(worker, env, "/api/article", { id: other.id, action: "save" })).status, 200);
   let feed = await forYou(env);
-  assert.ok(!feed.some((item) => item.coverage === 2 || /Λεβαντόφσκι/.test(item.title)));
+  assert.ok(!feed.some((item) => /Λεβαντόφσκι/.test(item.title)));
   assert.equal(feed.find((item) => item.id === other.id).saved, true);
   assert.ok(rows(env, "SELECT opened_at FROM articles WHERE id = ?", story.id)[0].opened_at > 0);
   const saved = (await api(worker, env, "/api/feed", { tab: "saved" })).json.items;
@@ -508,7 +507,7 @@ test("a story your sources share in your topics is pushed once, at most three ti
   assert.equal(env.DB.sqlite.prepare("SELECT value FROM meta WHERE key = 'threshold'").get().value, `${now} 0.9`);
   assert.equal(pushes.length, 1);
   assert.equal(pushes[0].body.web_push, 8030);
-  assert.equal(pushes[0].body.notification.body, "Gazzetta · 2 πηγές");
+  assert.equal(pushes[0].body.notification.body, "Gazzetta");
   assert.equal(pushes[0].body.notification.navigate, "https://localhost/");
   assert.match(pushes[0].authorization, /^vapid t=.+, k=.+$/);
   assert.equal(await notify(env, now, new Set([story])), null);
