@@ -72,7 +72,13 @@ const STRINGS = {
   theme: "Θέμα",
   themeSystem: "Προεπιλογή συστήματος",
   themeLight: "Φωτεινό",
-  themeDark: "Σκούρο"
+  themeDark: "Σκούρο",
+  minuteAgo: "Πριν από 1 λεπτό",
+  minutesAgo: "{n} λεπτά πριν",
+  hourAgo: "Πριν από 1 ώρα",
+  hoursAgo: "{n} ώρες πριν",
+  yesterday: "Χθες",
+  daysAgo: "{n} ημέρες πριν"
 };
 
 export const CATEGORIES = [
@@ -133,10 +139,13 @@ export function dayLabel(timestamp) {
 
 export function ago(timestamp) {
   const now = Date.now();
-  const minutes = Math.max(0, Math.floor((now - timestamp) / 60000));
-  if (minutes < 60) return formatter(Intl.RelativeTimeFormat).format(-minutes, "minute");
-  if (minutes < 1440) return formatter(Intl.RelativeTimeFormat).format(-Math.floor(minutes / 60), "hour");
+  const minutes = Math.max(1, Math.floor((now - timestamp) / 60000));
+  if (minutes < 60) return minutes === 1 ? t("minuteAgo") : t("minutesAgo", { n: minutes });
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return hours === 1 ? t("hourAgo") : t("hoursAgo", { n: hours });
   const days = daysBetween(timestamp, now);
-  if (days < 7) return formatter(Intl.RelativeTimeFormat, { numeric: "auto" }).format(-days, "day");
-  return formatter(Intl.DateTimeFormat, { day: "numeric", month: "short", year: "numeric" }).format(timestamp);
+  if (days === 1) return t("yesterday");
+  if (days <= 8) return t("daysAgo", { n: days });
+  const year = new Date(timestamp).getFullYear() === new Date(now).getFullYear() ? undefined : "numeric";
+  return formatter(Intl.DateTimeFormat, { day: "numeric", month: "short", year }).format(timestamp);
 }
