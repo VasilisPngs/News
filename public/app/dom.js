@@ -236,7 +236,6 @@ export function loadingIndicator({ contained = false, progress = null } = {}) {
 
 export const loading = () => el("div", { class: "loading" }, loadingIndicator());
 
-
 export function sortable(list, onSort) {
   let dragged = null;
   list.addEventListener("click", (event) => {
