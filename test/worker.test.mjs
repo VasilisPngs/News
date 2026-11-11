@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { createHash } from "node:crypto";
 import worker, { refresh, notify, prune, backfill, pick, icons, posters, domains, suggestNext, tryCandidates } from "../src/index.js";
 import { environment, network, api, rss, context, device, decrypt, ai, cosine } from "./helpers.mjs";
 import { decodeProfile, decodeVector } from "../src/rank.js";
@@ -636,4 +637,11 @@ test("the page applies the stored theme before the stylesheet loads, under the k
   const head = html.slice(0, html.indexOf('<link rel="stylesheet"'));
   assert.ok(head.includes(`localStorage.getItem("${key}")`));
   assert.ok(head.includes("document.documentElement.dataset.theme = theme"));
+});
+
+test("the Content-Security-Policy allows the page's own inline scripts and no others", () => {
+  const html = readFileSync(new URL("../public/index.html", import.meta.url), "utf8");
+  const policy = readFileSync(new URL("../public/_headers", import.meta.url), "utf8").match(/Content-Security-Policy: (.+)/)[1];
+  const hashes = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((match) => `'sha256-${createHash("sha256").update(match[1]).digest("base64")}'`);
+  assert.equal(policy, `script-src 'self' ${hashes.join(" ")}; object-src 'none'; base-uri 'none'; frame-ancestors 'none'`);
 });

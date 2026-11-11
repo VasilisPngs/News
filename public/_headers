@@ -1,4 +1,4 @@
 /*
-  Content-Security-Policy: frame-ancestors 'none'
+  Content-Security-Policy: script-src 'self' 'sha256-6R9XY+QI7N5FW1RxcGmQNx8BlWv8vEdx0MnuPeHgmXw=' 'sha256-0waTVOUX4lM1e0pL3pZ1t/jP1Gy9ieNPKsVM9bcLXbM='; object-src 'none'; base-uri 'none'; frame-ancestors 'none'
   X-Content-Type-Options: nosniff
   Referrer-Policy: no-referrer
