@@ -7,6 +7,12 @@
 <meta name="description" content="Άρθρα διαλεγμένα για εσάς ανά θέμα και τα πιο πρόσφατα από τα sites που ακολουθείτε.">
 <meta name="theme-color" content="#fcf8f9" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#0e0e0f" media="(prefers-color-scheme: dark)">
+<script>
+try {
+  const theme = localStorage.getItem("news.theme");
+  if (theme === "light" || theme === "dark") document.documentElement.dataset.theme = theme;
+} catch {}
+</script>
 <link rel="manifest" href="/manifest.webmanifest" crossorigin="use-credentials">
 <link rel="icon" href="/icons/icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png?v=2">

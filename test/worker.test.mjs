@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import worker, { refresh, notify, prune, backfill, pick, icons, posters, domains, suggestNext, tryCandidates } from "../src/index.js";
 import { environment, network, api, rss, context, device, decrypt, ai, cosine } from "./helpers.mjs";
 import { decodeProfile, decodeVector } from "../src/rank.js";
@@ -627,4 +628,12 @@ test("requests need a valid Access session away from localhost", async () => {
   assert.equal((await api(worker, env, "/api/state", {}, { host: "news.example.workers.dev" })).status, 403);
   assert.equal((await api(worker, env, "/api/state", undefined, { method: "GET" })).status, 405);
   assert.equal((await api(worker, env, "/api/nothing", {})).status, 404);
+});
+
+test("the page applies the stored theme before the stylesheet loads, under the key theme.js uses", () => {
+  const html = readFileSync(new URL("../public/index.html", import.meta.url), "utf8");
+  const key = readFileSync(new URL("../public/app/theme.js", import.meta.url), "utf8").match(/const STORAGE_KEY = "([^"]+)"/)[1];
+  const head = html.slice(0, html.indexOf('<link rel="stylesheet"'));
+  assert.ok(head.includes(`localStorage.getItem("${key}")`));
+  assert.ok(head.includes("document.documentElement.dataset.theme = theme"));
 });
