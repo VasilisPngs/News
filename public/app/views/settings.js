@@ -12,7 +12,7 @@ const section = (title, content) => el("section", { class: "group" }, [title ? e
 const lines = (label, detail) => el("span", { class: "grow" }, [el("div", { text: label }), detail ? el("div", { class: "supporting", text: detail }) : null]);
 
 function link(href, label, detail) {
-  return el("a", { class: "list-item action", href, "data-link": "" }, [el("span", { class: "grow", text: label }), detail ? el("span", { class: "trailing", text: detail }) : null, icon("chevron")]);
+  return el("a", { class: "list-item action", href, "data-link": "" }, [el("span", { class: "grow", text: label }), detail ? el("span", { class: "trailing", text: detail }) : null]);
 }
 
 function choice(label, options, current, onPick) {
