@@ -65,7 +65,7 @@ export function ai({ sites = [] } = {}) {
     calls,
     run: async (model, input) => {
       calls.push({ model, input });
-      if (model === "@cf/google/embeddinggemma-300m") return { shape: [input.text.length, 768], data: input.text.map(wordVector) };
+      if (model === "@cf/google/embeddinggemma-2") return { object: "list", data: input.input.map((text, index) => ({ object: "embedding", index, embedding: wordVector(text) })) };
       if (model === "@cf/google/gemma-4-26b-a4b-it") return { choices: [{ message: { role: "assistant", content: sites.join("\n") } }] };
       throw new Error(`unexpected model ${model}`);
     }

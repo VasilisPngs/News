@@ -3,7 +3,7 @@ import { parseFeed, download, discover, looksLikeFeed, siteIcon, pageImage } fro
 import { quantize, encodeVector, decodeVector, encodeProfile, decodeProfile, learn, affinity, tokens, grouper } from "./rank.js";
 import { createKey, publicKey, pushEndpoint, keyLength, sendPush } from "./push.js";
 
-const EMBED_MODEL = "@cf/google/embeddinggemma-300m";
+const EMBED_MODEL = "@cf/google/embeddinggemma-2";
 const TITLE_TASK = "task: clustering | query: ";
 const SUGGEST_MODEL = "@cf/google/gemma-4-26b-a4b-it";
 const SUGGEST_COUNT = 12;
@@ -82,8 +82,8 @@ async function embed(env, texts) {
   try {
     const vectors = [];
     for (const batch of chunks(texts, EMBED_BATCH)) {
-      const result = await env.AI.run(EMBED_MODEL, { text: batch });
-      for (const values of result.data) vectors.push(quantize(values));
+      const result = await env.AI.run(EMBED_MODEL, { input: batch });
+      for (const item of result.data) vectors.push(quantize(item.embedding));
     }
     return vectors;
   } catch (error) {
@@ -567,6 +567,50 @@ export async function backfill(env, now) {
   return rows.length;
 }
 
+export async function rebuild(env, now) {
+  const model = await getMeta(env, "model");
+  if (model === EMBED_MODEL) return false;
+  if (model === `${EMBED_MODEL} profiled`) {
+    if (await env.DB.prepare("SELECT 1 FROM articles WHERE vector IS NULL AND published_at > ?1 LIMIT 1").bind(now - WINDOW_MS).first()) return true;
+    await env.DB.batch([env.DB.prepare("DELETE FROM meta WHERE key = 'threshold'"), setMeta(env, "model", EMBED_MODEL)]);
+    return false;
+  }
+  if (model !== `${EMBED_MODEL} rebuilding`) {
+    await env.DB.batch([
+      env.DB.prepare("UPDATE articles SET vector = NULL WHERE vector IS NOT NULL"),
+      env.DB.prepare("UPDATE topics SET vector = NULL"),
+      env.DB.prepare("DELETE FROM meta WHERE key IN ('profile', 'threshold')"),
+      setMeta(env, "model", `${EMBED_MODEL} rebuilding`)
+    ]);
+  }
+  const topics = (await env.DB.prepare("SELECT id, name FROM topics WHERE vector IS NULL").all()).results;
+  if (topics.length) {
+    const vectors = await embed(env, topics.map((topic) => topic.name));
+    if (vectors.length === topics.length) await env.DB.batch(topics.map((topic, index) => env.DB.prepare("UPDATE topics SET vector = ?2 WHERE id = ?1").bind(topic.id, encodeVector(vectors[index]))));
+    return true;
+  }
+  const signal = "(opened_at IS NOT NULL OR saved_at IS NOT NULL OR hidden_at IS NOT NULL)";
+  const pending = (await env.DB.prepare(`SELECT id, title FROM articles WHERE vector IS NULL AND ${signal} LIMIT ?1`).bind(EMBED_BATCH).all()).results;
+  if (pending.length) {
+    const vectors = await embed(env, pending.map((row) => TITLE_TASK + row.title));
+    if (vectors.length === pending.length) await env.DB.batch(pending.map((row, index) => env.DB.prepare("UPDATE articles SET vector = ?2 WHERE id = ?1").bind(row.id, encodeVector(vectors[index]))));
+    return true;
+  }
+  const events = [];
+  for (const row of (await env.DB.prepare(`SELECT vector, opened_at, saved_at, hidden_at, dwell FROM articles WHERE vector IS NOT NULL AND ${signal}`).all()).results) {
+    const vector = decodeVector(row.vector);
+    const weight = row.dwell === null ? 0 : row.dwell < BOUNCE_SECONDS ? WEIGHTS.bounce : row.dwell >= READ_SECONDS ? WEIGHTS.read : 0;
+    if (row.opened_at) events.push([row.opened_at, vector, WEIGHTS.open]);
+    if (row.opened_at && weight) events.push([row.opened_at + row.dwell * 1000, vector, weight]);
+    if (row.saved_at) events.push([row.saved_at, vector, WEIGHTS.save]);
+    if (row.hidden_at) events.push([row.hidden_at, vector, WEIGHTS.less]);
+  }
+  events.sort((a, b) => a[0] - b[0]);
+  const profile = events.reduce((current, [, vector, weight]) => learn(current, vector, weight), null);
+  await env.DB.batch([...(profile ? [setMeta(env, "profile", encodeProfile(profile))] : []), setMeta(env, "model", `${EMBED_MODEL} profiled`)]);
+  return true;
+}
+
 export async function posters(env, now) {
   const rows = (await env.DB.prepare("SELECT id, url FROM articles WHERE image IS NULL AND seen_at > ?1 ORDER BY published_at DESC LIMIT ?2").bind(now - RETENTION_MS, POSTERS_PER_RUN).all()).results;
   const found = await Promise.all(rows.map((row) => pageImage(row.url)));
@@ -772,9 +816,10 @@ export default {
     const now = controller.scheduledTime;
     ctx.waitUntil(
       (async () => {
+        const rebuilding = await rebuild(env, now);
         const { touched } = await refresh(env, now);
-        await notify(env, now, touched);
-        await backfill(env, now);
+        if (!rebuilding) await notify(env, now, touched);
+        for (let round = rebuilding ? 4 : 1; round > 0 && (await backfill(env, now)) === EMBED_BATCH; round -= 1);
         await posters(env, now);
         await suggestNext(env, now);
         const pooled = await tryCandidates(env);
