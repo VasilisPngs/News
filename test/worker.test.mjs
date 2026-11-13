@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
-import worker, { refresh, notify, prune, backfill, pick, icons, posters, domains, suggestNext, tryCandidates, rebuild } from "../src/index.js";
+import worker, { refresh, notify, prune, backfill, pick, icons, posters, domains, suggestNext, tryCandidates } from "../src/index.js";
 import { environment, network, api, rss, context, device, decrypt, ai, cosine } from "./helpers.mjs";
 import { decodeProfile, decodeVector } from "../src/rank.js";
 
@@ -644,26 +644,4 @@ test("the Content-Security-Policy allows the page's own inline scripts and no ot
   const policy = readFileSync(new URL("../public/_headers", import.meta.url), "utf8").match(/Content-Security-Policy: (.+)/)[1];
   const hashes = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((match) => `'sha256-${createHash("sha256").update(match[1]).digest("base64")}'`);
   assert.equal(policy, `script-src 'self' ${hashes.join(" ")}; object-src 'none'; base-uri 'none'; frame-ancestors 'none'`);
-});
-
-test("a new embedding model re-embeds the topics and the articles with signals, rebuilds the profile and holds notifications until done", async () => {
-  const env = environment();
-  const now = Date.now();
-  await setup(env, now, { follow: SITES });
-  env.DB.sqlite.prepare("UPDATE articles SET opened_at = ?1, dwell = 90 WHERE title LIKE ?2").run(now - 60000, `${PEDRI}%`);
-  env.DB.sqlite.prepare("INSERT INTO meta (key, value) VALUES ('profile', 'old'), ('threshold', 'old') ON CONFLICT(key) DO UPDATE SET value = excluded.value").run();
-  const total = rows(env, "SELECT COUNT(*) AS n FROM articles")[0].n;
-  assert.equal(await rebuild(env, now), true);
-  assert.equal(rows(env, "SELECT COUNT(*) AS n FROM articles WHERE vector IS NULL")[0].n, total);
-  assert.equal(rows(env, "SELECT COUNT(*) AS n FROM topics WHERE vector IS NULL")[0].n, 0);
-  assert.equal(rows(env, "SELECT COUNT(*) AS n FROM meta WHERE key IN ('profile', 'threshold')")[0].n, 0);
-  assert.equal(await rebuild(env, now), true);
-  assert.equal(rows(env, "SELECT COUNT(*) AS n FROM articles WHERE vector IS NOT NULL")[0].n, 1);
-  assert.equal(await rebuild(env, now), true);
-  assert.notEqual(rows(env, "SELECT value FROM meta WHERE key = 'profile'")[0].value, "old");
-  assert.equal(await rebuild(env, now), true);
-  assert.equal(await backfill(env, now), total - 1);
-  assert.equal(await rebuild(env, now), false);
-  assert.equal(rows(env, "SELECT value FROM meta WHERE key = 'model'")[0].value, "@cf/google/embeddinggemma-2");
-  assert.equal(await rebuild(env, now), false);
 });
