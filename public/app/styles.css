@@ -983,7 +983,9 @@ label.list-item {
 }
 
 html.locked {
+  overflow-y: scroll;
   overscroll-behavior: none;
+  scrollbar-color: transparent color-mix(in srgb, var(--md-surface) 68%, black);
 }
 
 .dialog {
