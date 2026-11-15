@@ -20,9 +20,7 @@ const resolvedTheme = () => (current === "system" ? (query.matches ? "light" : "
 let applied = false;
 
 export function applyTheme() {
-  const root = document.documentElement;
-  if (current === "system") root.removeAttribute("data-theme");
-  else root.dataset.theme = current;
+  document.head.querySelector('meta[name="color-scheme"]').content = current === "system" ? "light dark" : current;
   for (const stale of document.head.querySelectorAll('meta[name="theme-color"][media]')) stale.remove();
   let meta = document.head.querySelector('meta[name="theme-color"]');
   if (!meta) {

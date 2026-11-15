@@ -636,7 +636,7 @@ test("the page applies the stored theme before the stylesheet loads, under the k
   const key = readFileSync(new URL("../public/app/theme.js", import.meta.url), "utf8").match(/const STORAGE_KEY = "([^"]+)"/)[1];
   const head = html.slice(0, html.indexOf('<link rel="stylesheet"'));
   assert.ok(head.includes(`localStorage.getItem("${key}")`));
-  assert.ok(head.includes("document.documentElement.dataset.theme = theme"));
+  assert.ok(head.includes(`document.querySelector('meta[name="color-scheme"]').content = theme`));
 });
 
 test("the Content-Security-Policy allows the page's own inline scripts and no others", () => {

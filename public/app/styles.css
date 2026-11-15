@@ -82,11 +82,11 @@
   }
 }
 
-:root[data-theme="light"] {
+:root:has(> head > meta[name="color-scheme"][content="light"]) {
   color-scheme: light;
 }
 
-:root[data-theme="dark"] {
+:root:has(> head > meta[name="color-scheme"][content="dark"]) {
   color-scheme: dark;
 }
 
