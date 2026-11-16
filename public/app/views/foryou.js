@@ -37,7 +37,7 @@ function watchSeen(root) {
     (entries) => {
       for (const { target, isIntersecting } of entries) {
         const id = target.dataset.id;
-        if (isIntersecting && !timers.has(id)) timers.set(id, setTimeout(() => seen(id), SEEN_MS));
+        if (isIntersecting) timers.getOrInsertComputed(id, () => setTimeout(() => seen(id), SEEN_MS));
         if (!isIntersecting) {
           clearTimeout(timers.get(id));
           timers.delete(id);

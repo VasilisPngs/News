@@ -107,10 +107,7 @@ const LOCALE = "el-GR";
 const formatters = new Map();
 
 export function formatter(Type, options = {}) {
-  const key = `${Type.name}|${JSON.stringify(options)}`;
-  let instance = formatters.get(key);
-  if (!instance) formatters.set(key, (instance = new Type(LOCALE, options)));
-  return instance;
+  return formatters.getOrInsertComputed(`${Type.name}|${JSON.stringify(options)}`, () => new Type(LOCALE, options));
 }
 
 export function t(key, params) {

@@ -35,13 +35,7 @@ function sourceChips(sources, active) {
 }
 
 function byDay(items) {
-  const days = new Map();
-  for (const item of items) {
-    const day = dayStart(item.published);
-    if (!days.has(day)) days.set(day, []);
-    days.get(day).push(item);
-  }
-  return [...days.entries()];
+  return [...Map.groupBy(items, (item) => dayStart(item.published))];
 }
 
 function page(state) {

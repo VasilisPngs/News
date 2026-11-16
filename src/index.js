@@ -637,7 +637,7 @@ export async function refresh(env, now, { owner = null, hidden = null } = {}) {
     updates.push(env.DB.prepare("UPDATE feeds SET fetched_at = ?2, failures = 0, etag = ?3, modified = ?4 WHERE url = ?1").bind(feed.url, now, page.etag || null, page.modified || null));
     for (const entry of parseFeed(page.text, page.url, now).items) {
       const id = await hashId(entry.url);
-      if (!found.has(id)) found.set(id, { id, feed, item: entry });
+      found.getOrInsert(id, { id, feed, item: entry });
     }
   }
   const known = new Map();

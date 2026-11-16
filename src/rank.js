@@ -36,9 +36,7 @@ function squares(vector) {
 }
 
 function cachedSquares(vector) {
-  let sum = norms.get(vector);
-  if (sum === undefined) norms.set(vector, (sum = squares(vector)));
-  return sum;
+  return norms.getOrInsertComputed(vector, squares);
 }
 
 function similarity(a, left, b, right) {
