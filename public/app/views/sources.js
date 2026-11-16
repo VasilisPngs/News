@@ -11,7 +11,7 @@ const SOURCE_KEY = "news.source";
 let observer = null;
 
 async function newSource() {
-  const url = await promptDialog(t("newSource"), "", { label: t("sourceLabel"), hint: t("sourcePlaceholder"), action: t("add"), cancel: t("cancel"), required: true });
+  const url = await promptDialog(t("newSource"), "", { label: t("sourceLabel"), hint: t("sourcePlaceholder"), action: t("add"), cancel: t("cancel"), required: true, input: { inputMode: "url", autocapitalize: "none", spellcheck: false, autocorrect: false } });
   if (!url) return;
   snackbar(t("sourceSearching"));
   try {
