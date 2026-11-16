@@ -34,10 +34,6 @@ function sourceChips(sources, active) {
   return chipStrip([chip(null, t("all")), ...sources.map((source) => chip(source.id, source.title))]);
 }
 
-function byDay(items) {
-  return [...Map.groupBy(items, (item) => dayStart(item.published))];
-}
-
 function page(state) {
   state.classList.add("page");
   return state;
@@ -65,7 +61,7 @@ export function renderSources(container) {
     container.append(page(emptyState("news", t("noArticles"), t("noArticlesHint"))));
     return;
   }
-  for (const [day, items] of byDay(current.items)) {
+  for (const [day, items] of Map.groupBy(current.items, (item) => dayStart(item.published))) {
     container.append(el("section", { class: "group" }, [el("h2", { text: dayLabel(day) }), articleList(items, "sources")]));
   }
   observer?.disconnect();
