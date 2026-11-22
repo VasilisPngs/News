@@ -538,7 +538,7 @@ label.list-item {
 .trailing {
   color: var(--md-on-surface-variant);
   font: 400 0.875rem/1.25rem var(--md-font);
-  letter-spacing: 0.0125rem;
+  letter-spacing: 0.0156rem;
 }
 
 .trailing {
@@ -903,7 +903,7 @@ label.list-item {
   margin: 0;
   color: var(--md-on-surface-variant);
   font: 400 0.875rem/1.25rem var(--md-font);
-  letter-spacing: 0.0125rem;
+  letter-spacing: 0.0156rem;
 }
 
 .empty .btn {
@@ -1051,7 +1051,7 @@ html.locked {
   margin: 0;
   color: var(--md-on-surface-variant);
   font: 400 0.875rem/1.25rem var(--md-font);
-  letter-spacing: 0.0125rem;
+  letter-spacing: 0.0156rem;
 }
 
 .dialog-actions {
@@ -1204,7 +1204,7 @@ html.locked {
   color: var(--md-inverse-on-surface);
   box-shadow: var(--md-shadow-3);
   font: 400 0.875rem/1.25rem var(--md-font);
-  letter-spacing: 0.0125rem;
+  letter-spacing: 0.0156rem;
   animation: snackbar-in var(--md-fast-spatial), fade-in var(--md-fast-effects);
 }
 
@@ -1239,7 +1239,7 @@ html.locked {
   background: var(--md-error-container);
   color: var(--md-on-error-container);
   font: 400 0.875rem/1.25rem var(--md-font);
-  letter-spacing: 0.0125rem;
+  letter-spacing: 0.0156rem;
 }
 
 .banner .btn.text {
