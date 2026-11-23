@@ -66,7 +66,7 @@ const STRINGS = {
   notifications: "Ειδοποιήσεις",
   importantNews: "Σημαντικές ειδήσεις",
   importantNewsNote: "Έως 3 την ημέρα, όταν πολλές από τις πηγές σας γράφουν για τα θέματά σας.",
-  notificationsBlocked: "Οι ειδοποιήσεις του News είναι κλειστές στις Ρυθμίσεις του iPhone.",
+  notificationsBlocked: "Οι ειδοποιήσεις του News είναι κλειστές σε αυτή τη συσκευή.",
   notificationsFailed: "Δεν ενεργοποιήθηκαν οι ειδοποιήσεις.",
   preferences: "Προτιμήσεις",
   theme: "Θέμα",

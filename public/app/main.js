@@ -75,7 +75,6 @@ function render() {
     barLead.replaceChildren();
     barActions.replaceChildren();
     delete view.dataset.title;
-    delete view.dataset.editing;
     VIEWS[route.name](view, route.params);
   };
   const update = () => {

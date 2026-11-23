@@ -563,9 +563,9 @@ label.list-item {
   flex: none;
   display: grid;
   place-items: center;
-  width: 44px;
-  height: 44px;
-  margin-inline: -12px;
+  width: 48px;
+  height: 48px;
+  margin-inline: -14px;
   padding: 0;
   border: 0;
   border-radius: 50%;

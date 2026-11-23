@@ -236,6 +236,7 @@ export function loadingIndicator({ contained = false, progress = null } = {}) {
 export const loading = () => el("div", { class: "loading" }, loadingIndicator());
 
 export function sortable(list, onSort) {
+  const keyed = () => [...list.children].filter((child) => child.dataset.key);
   let dragged = null;
   list.addEventListener("click", (event) => {
     const handle = event.target.closest(".drag-handle");
@@ -244,7 +245,7 @@ export function sortable(list, onSort) {
       dragged = null;
       return;
     }
-    const rows = [...list.children];
+    const rows = keyed();
     const row = rows.find((child) => child.contains(handle));
     const from = rows.indexOf(row);
     const move = (to) => {
@@ -264,7 +265,7 @@ export function sortable(list, onSort) {
     if (!handle || event.button > 0) return;
     event.preventDefault();
     dragged = null;
-    const rows = [...list.children];
+    const rows = keyed();
     const row = rows.find((child) => child.contains(handle));
     const from = rows.indexOf(row);
     const step = row.offsetHeight + parseFloat(getComputedStyle(list).rowGap || 0);
@@ -324,7 +325,7 @@ export function sortable(list, onSort) {
       row.style.removeProperty("transform");
       setTimeout(() => {
         list.classList.remove("sorting");
-        if (to !== from) onSort([...list.children].map((node) => node.dataset.key));
+        if (to !== from) onSort(keyed().map((node) => node.dataset.key));
         list.dispatchEvent(new Event("swipeend", { bubbles: true }));
       }, 360);
     };
