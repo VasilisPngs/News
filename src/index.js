@@ -162,6 +162,7 @@ async function suggest(env, topic, now) {
         }
       ],
       response_format: { type: "json_schema", json_schema: FEED_LIST },
+      chat_template_kwargs: { enable_thinking: false },
       max_completion_tokens: 2048,
       temperature: 0.2
     });

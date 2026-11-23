@@ -140,6 +140,7 @@ test("a suggested feed joins only when most of its recent headlines are about th
   topicOnly(env);
   assert.equal(await suggestNext(env, now), 3);
   assert.match(asked(env, "feeds")[0].input.messages[0].content, /feeds of established news websites whose articles are mainly about "Μπαρτσελόνα"/);
+  assert.equal(asked(env, "feeds")[0].input.chat_template_kwargs.enable_thinking, false);
   await tryCandidates(env, now);
   await tryCandidates(env, now);
   assert.deepEqual(rows(env, "SELECT title FROM sources WHERE hidden = 1").map((row) => row.title), ["Gazzetta"]);
