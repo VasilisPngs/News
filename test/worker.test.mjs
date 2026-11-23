@@ -720,5 +720,5 @@ test("the Content-Security-Policy allows the page's own inline scripts and no ot
   const html = readFileSync(new URL("../public/index.html", import.meta.url), "utf8");
   const policy = readFileSync(new URL("../public/_headers", import.meta.url), "utf8").match(/Content-Security-Policy: (.+)/)[1];
   const hashes = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((match) => `'sha256-${createHash("sha256").update(match[1]).digest("base64")}'`);
-  assert.equal(policy, `script-src 'self' ${hashes.join(" ")}; object-src 'none'; base-uri 'none'; frame-ancestors 'none'`);
+  assert.equal(policy, `script-src 'self' ${hashes.join(" ")}; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; require-trusted-types-for 'script'`);
 });
