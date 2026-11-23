@@ -249,7 +249,7 @@ export async function tryCandidates(env, now = Date.now()) {
       added.push(id);
     }
     await env.DB.batch(statements);
-    if (!(await env.DB.prepare("SELECT 1 AS hit FROM candidates WHERE topic = ?1 AND tried = 0").bind(row.topic).first("hit"))) await reopen(env, row.topic);
+    if (!(await env.DB.prepare("SELECT 1 AS hit FROM candidates WHERE topic = ?1 AND tried = 0 LIMIT 1").bind(row.topic).first("hit"))) await reopen(env, row.topic);
   }
   return added;
 }
