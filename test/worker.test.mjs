@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
-import worker, { refresh, notify, prune, backfill, pick, icons, posters, domains, suggestNext, tryCandidates } from "../src/index.js";
+import worker, { refresh, notify, prune, backfill, pick, icons, posters, targets, suggestNext, tryCandidates } from "../src/index.js";
 import { environment, network, api, rss, context, device, decrypt, ai, cosine } from "./helpers.mjs";
 import { decodeProfile, decodeVector } from "../src/rank.js";
 
@@ -68,7 +68,7 @@ test("For You picks from the sites the AI found for your topics, grouped by stor
   assert.ok(response.json.pushKey.length > 80);
   assert.match(env.AI.calls.find((call) => call.input.messages).input.messages[0].content, /"Μπαρτσελόνα"/);
   assert.deepEqual(rows(env, "SELECT title, hidden FROM sources ORDER BY title"), [{ title: "Gazzetta", hidden: 1 }, { title: "Sport24", hidden: 1 }]);
-  assert.deepEqual(rows(env, "SELECT domain, tried FROM candidates ORDER BY domain"), [{ domain: "gazzetta.example", tried: 1 }, { domain: "sport.example", tried: 1 }]);
+  assert.deepEqual(rows(env, "SELECT target, tried FROM candidates ORDER BY target"), [{ target: "gazzetta.example", tried: 1 }, { target: "sport.example", tried: 1 }]);
   assert.deepEqual((await api(worker, env, "/api/state", {})).json.sources, []);
   assert.equal(rows(env, "SELECT COUNT(*) AS n FROM articles WHERE vector IS NOT NULL")[0].n, 6);
   const items = await forYou(env);
@@ -88,12 +88,17 @@ test("For You picks from the sites the AI found for your topics, grouped by stor
   assert.ok((await forYou(env)).every((item) => item.source === "Sport24"));
 });
 
-test("site suggestions are read from any reply layout, and a topic's sites are tried two per cron run", async () => {
-  assert.deepEqual(domains("Sure!\n1. **www.Gazzetta.gr** – sports\n- https://www.bbc.co.uk/sport\n9to5mac.com\n9to5mac.com"), ["gazzetta.gr", "bbc.co.uk", "9to5mac.com"]);
+test("feed suggestions are read from any reply layout, and a topic's feeds are tried two per cron run", async () => {
+  assert.deepEqual(targets('{"feeds": ["https://www.bbc.co.uk/sport/football/rss.xml", "https://Gazzetta.gr/rss."]}\n1. **www.Sport24.gr** – sports\n9to5mac.com\n9to5mac.com'), [
+    "https://www.bbc.co.uk/sport/football/rss.xml",
+    "https://gazzetta.gr/rss",
+    "sport24.gr",
+    "9to5mac.com"
+  ]);
   const reasoning = environment({ AI: { run: async () => ({ choices: [{ message: { content: null, reasoning_content: "Candidates: gazzetta.example and sport.example" } }] }) } });
   sites(Date.now());
   await api(worker, reasoning, "/api/topics", { action: "add", name: "Μπάλα" });
-  assert.deepEqual(rows(reasoning, "SELECT domain FROM candidates ORDER BY domain").map((row) => row.domain), ["gazzetta.example", "sport.example"]);
+  assert.deepEqual(rows(reasoning, "SELECT target FROM candidates ORDER BY target").map((row) => row.target), ["gazzetta.example", "sport.example"]);
   const env = pooled(["gazzetta.example", "none.example", "sport.example"]);
   const now = Date.now();
   sites(now);
@@ -106,6 +111,77 @@ test("site suggestions are read from any reply layout, and a topic's sites are t
   assert.deepEqual(await tryCandidates(env), []);
   assert.deepEqual(rows(env, "SELECT title FROM sources WHERE hidden = 1 AND topic = 't1' ORDER BY title").map((row) => row.title), ["Gazzetta", "Sport24"]);
   assert.equal(rows(env, "SELECT COUNT(*) AS n FROM feeds")[0].n, 2);
+});
+
+const topicOnly = (env) => env.DB.sqlite.prepare("INSERT INTO topics (id, name, vector, position, created_at) VALUES ('t1', 'Μπαρτσελόνα', NULL, 0, 1)").run();
+
+const asked = (env, name) => env.AI.calls.filter((call) => call.input.response_format?.json_schema?.name === name);
+
+test("a suggested feed joins only when most of its recent headlines are about the topic, judged without thinking, and a stale feed is never judged", async () => {
+  const now = Date.now();
+  const env = environment({ AI: ai({ sites: ["gazzetta.example", "https://weather.example/feed", "stale.example"], relevant: (topic, title) => title.includes(topic) }) });
+  sites(now, [
+    [
+      "https://weather.example/feed",
+      () =>
+        new Response(
+          rss(
+            [
+              { title: "Καιρός: Βροχές σε όλη τη χώρα", link: "https://weather.example/1", at: now - HOUR },
+              { title: "Καιρός: Χιόνια στα ορεινά", link: "https://weather.example/2", at: now - 2 * HOUR }
+            ],
+            "Weather"
+          )
+        )
+    ],
+    ["https://stale.example/", () => new Response(rss([{ title: "Μπαρτσελόνα: Η νίκη του 2009", link: "https://stale.example/1", at: now - 20 * 86400000 }], "Stale"))]
+  ]);
+  await api(worker, env, "/api/state", {});
+  topicOnly(env);
+  assert.equal(await suggestNext(env, now), 3);
+  assert.match(asked(env, "feeds")[0].input.messages[0].content, /feeds of established news websites whose articles are mainly about "Μπαρτσελόνα"/);
+  await tryCandidates(env, now);
+  await tryCandidates(env, now);
+  assert.deepEqual(rows(env, "SELECT title FROM sources WHERE hidden = 1").map((row) => row.title), ["Gazzetta"]);
+  assert.deepEqual(rows(env, "SELECT tried FROM candidates").map((row) => row.tried), [1, 1, 1]);
+  const judged = asked(env, "headlines");
+  assert.equal(judged.length, 2);
+  assert.ok(judged.every((call) => call.input.chat_template_kwargs.enable_thinking === false));
+  assert.match(judged[0].input.messages[0].content, /^1\. .+\n2\. .+\n3\. .+\n4\. .+\n\nWhich of them are mainly about "Μπαρτσελόνα" and written in Greek or English\?/m);
+});
+
+test("a topic left with fewer than three feeds of its own is asked again without the feeds already tried, until nothing new comes back", async () => {
+  const now = Date.now();
+  const env = pooled(["gazzetta.example", "none.example"]);
+  sites(now);
+  await api(worker, env, "/api/state", {});
+  topicOnly(env);
+  assert.equal(await suggestNext(env, now), 2);
+  assert.equal((await tryCandidates(env, now)).length, 1);
+  assert.equal(rows(env, "SELECT pooled_at FROM topics")[0].pooled_at, null);
+  assert.equal(await suggestNext(env, now), 0);
+  assert.match(asked(env, "feeds")[1].input.messages[0].content, /Leave out these, which were tried already: gazzetta\.example, none\.example\./);
+  assert.equal(rows(env, "SELECT pooled_at FROM topics")[0].pooled_at, now);
+  assert.equal(await suggestNext(env, now), 0);
+  assert.equal(asked(env, "feeds").length, 2);
+});
+
+test("a feed waits for the next run when the AI cannot judge it", async () => {
+  const now = Date.now();
+  const env = pooled(["gazzetta.example"]);
+  sites(now);
+  await api(worker, env, "/api/state", {});
+  topicOnly(env);
+  await suggestNext(env, now);
+  const run = env.AI.run;
+  env.AI.run = async (model, input) => {
+    if (input.response_format?.json_schema?.name === "headlines") throw new Error("capacity");
+    return run(model, input);
+  };
+  assert.deepEqual(await tryCandidates(env, now), []);
+  assert.deepEqual(rows(env, "SELECT tried FROM candidates"), [{ tried: 0 }]);
+  env.AI.run = run;
+  assert.equal((await tryCandidates(env, now)).length, 1);
 });
 
 test("the median gate keeps the better half and freshness weighs as much as relevance", () => {
@@ -250,7 +326,7 @@ test("renaming a topic looks for its sites again and deleting it drops them, kee
   const again = rows(env, "SELECT id FROM sources WHERE hidden = 1").map((row) => row.id);
   assert.equal(again.length, 2);
   assert.ok(again.every((source) => !before.includes(source)));
-  assert.equal(env.AI.calls.filter((call) => call.input.messages).length, 2);
+  assert.equal(env.AI.calls.filter((call) => call.input.response_format?.json_schema?.name === "feeds").length, 2);
   const after = await api(worker, env, "/api/topics", { action: "delete", id });
   assert.deepEqual(after.json.topics, []);
   assert.deepEqual(rows(env, "SELECT title FROM sources"), [{ title: "Followed" }]);

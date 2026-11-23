@@ -59,15 +59,19 @@ function wordVector(text) {
   return vector;
 }
 
-export function ai({ sites = [] } = {}) {
+export function ai({ sites = [], relevant = () => true } = {}) {
   const calls = [];
   return {
     calls,
     run: async (model, input) => {
       calls.push({ model, input });
       if (model === "@cf/google/embeddinggemma-2") return { object: "list", data: input.input.map((text, index) => ({ object: "embedding", index, embedding: wordVector(text) })) };
-      if (model === "@cf/google/gemma-4-26b-a4b-it") return { choices: [{ message: { role: "assistant", content: sites.join("\n") } }] };
-      throw new Error(`unexpected model ${model}`);
+      if (model !== "@cf/google/gemma-4-26b-a4b-it") throw new Error(`unexpected model ${model}`);
+      if (input.response_format?.json_schema?.name !== "headlines") return { choices: [{ message: { role: "assistant", content: JSON.stringify({ feeds: sites }) } }] };
+      const prompt = input.messages[0].content;
+      const topic = prompt.match(/about "([^"]+)"/)[1];
+      const numbers = [...prompt.matchAll(/^(\d+)\. (.+)$/gm)].filter(([, , title]) => relevant(topic, title)).map(([, number]) => Number(number));
+      return { choices: [{ message: { role: "assistant", content: JSON.stringify({ numbers }) } }] };
     }
   };
 }

@@ -1,12 +1,15 @@
 import { checkAccess } from "./access.js";
-import { parseFeed, download, discover, looksLikeFeed, siteIcon, pageImage } from "./feeds.js";
+import { parseFeed, download, discover, looksLikeFeed, siteIcon, pageImage, normalizeSite } from "./feeds.js";
 import { quantize, encodeVector, decodeVector, encodeProfile, decodeProfile, learn, affinity, tokens, grouper } from "./rank.js";
 import { createKey, publicKey, pushEndpoint, keyLength, sendPush } from "./push.js";
 
 const EMBED_MODEL = "@cf/google/embeddinggemma-2";
 const TITLE_TASK = "task: clustering | query: ";
-const SUGGEST_MODEL = "@cf/google/gemma-4-26b-a4b-it";
+const TEXT_MODEL = "@cf/google/gemma-4-26b-a4b-it";
 const SUGGEST_COUNT = 12;
+const SUGGEST_ROUNDS = 3;
+const POOL_MIN = 3;
+const JUDGE_ITEMS = 15;
 const POOL_PER_RUN = 2;
 const POOL_RETRY_MS = 6 * 3600000;
 const EMBED_BATCH = 32;
@@ -122,35 +125,43 @@ const unpool = (env, topic) => [
   env.DB.prepare("DELETE FROM sources WHERE hidden = 1 AND topic = ?1").bind(topic)
 ];
 
-export function domains(text) {
+export function targets(text) {
   const found = [];
-  for (const match of String(text || "").toLowerCase().matchAll(/\b((?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,24})\b/g)) {
-    const domain = match[1].replace(/^www\./, "");
-    if (!found.includes(domain)) found.push(domain);
+  for (const [match] of String(text || "").matchAll(/https?:\/\/[^\s"'<>()[\]{}|\\^`]+|\b(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,24}\b/gi)) {
+    const target = /^https?:/i.test(match) ? normalizeSite(match.replace(/[.,;:!?*]+$/, "")) : match.toLowerCase().replace(/^www\./, "");
+    if (target && !found.includes(target)) found.push(target);
   }
-  return found.slice(0, SUGGEST_COUNT);
+  return found;
 }
 
 function replyText(result) {
   const message = result?.choices?.[0]?.message ?? {};
-  const parts = [message.content, result?.response, message.reasoning_content, message.reasoning];
-  return parts
-    .flatMap((part) => (Array.isArray(part) ? part.map((piece) => piece?.text ?? "") : [part]))
-    .filter((part) => typeof part === "string" && part)
-    .join("\n");
+  const read = (...parts) =>
+    parts
+      .flatMap((part) => (Array.isArray(part) ? part.map((piece) => piece?.text ?? "") : [part]))
+      .filter((part) => typeof part === "string" && part)
+      .join("\n");
+  return read(message.content, result?.response) || read(message.reasoning_content, message.reasoning);
 }
 
+const FEED_LIST = { name: "feeds", schema: { type: "object", properties: { feeds: { type: "array", items: { type: "string" } } }, required: ["feeds"] }, strict: true };
+
+const HEADLINE_LIST = { name: "headlines", schema: { type: "object", properties: { numbers: { type: "array", items: { type: "integer" } } }, required: ["numbers"] }, strict: true };
+
 async function suggest(env, topic, now) {
+  const tried = (await env.DB.prepare("SELECT target FROM candidates WHERE topic = ?1").bind(topic.id).all()).results.map((row) => row.target);
+  const avoid = tried.length ? ` Leave out these, which were tried already: ${tried.join(", ")}.` : "";
   let text = "";
   let raw = null;
   try {
-    const result = await env.AI.run(SUGGEST_MODEL, {
+    const result = await env.AI.run(TEXT_MODEL, {
       messages: [
         {
           role: "user",
-          content: `List ${SUGGEST_COUNT} news websites that regularly publish articles about "${topic.name}". Mix Greek sites (.gr) with major international English-language sites, and prefer sites that offer an RSS feed. Reply with the bare domains only, one per line, nothing else.`
+          content: `List ${SUGGEST_COUNT} RSS or Atom feeds of established news websites whose articles are mainly about "${topic.name}". Where a site has a section or tag feed for that subject, give that feed instead of the site's main feed. Mix Greek sites with major international sites, all publishing in Greek or English.${avoid} Give the full feed URLs.`
         }
       ],
+      response_format: { type: "json_schema", json_schema: FEED_LIST },
       max_completion_tokens: 2048,
       temperature: 0.2
     });
@@ -159,11 +170,12 @@ async function suggest(env, topic, now) {
   } catch (error) {
     console.error(JSON.stringify({ suggest_failed: String(error && error.message).slice(0, 200) }));
   }
-  const found = domains(text);
-  if (!found.length && raw) console.error(JSON.stringify({ suggest_empty: JSON.stringify(raw).slice(0, 600) }));
+  const listed = targets(text);
+  if (!listed.length && raw) console.error(JSON.stringify({ suggest_empty: JSON.stringify(raw).slice(0, 600) }));
+  const found = listed.filter((target) => !tried.includes(target)).slice(0, SUGGEST_COUNT);
   await env.DB.batch([
     env.DB.prepare("UPDATE topics SET pooled_at = ?2 WHERE id = ?1").bind(topic.id, now),
-    ...found.map((domain) => env.DB.prepare("INSERT OR IGNORE INTO candidates (topic, domain) VALUES (?1, ?2)").bind(topic.id, domain))
+    ...found.map((target) => env.DB.prepare("INSERT OR IGNORE INTO candidates (topic, target) VALUES (?1, ?2)").bind(topic.id, target))
   ]);
   return found.length;
 }
@@ -177,24 +189,66 @@ export async function suggestNext(env, now) {
   return topic ? suggest(env, topic, now) : 0;
 }
 
-export async function tryCandidates(env) {
-  const rows = (await env.DB.prepare("SELECT topic, domain FROM candidates WHERE tried = 0 ORDER BY rowid LIMIT ?1").bind(POOL_PER_RUN).all()).results;
+async function judge(env, topic, items, now) {
+  const recent = items
+    .filter((item) => item.published > now - RETENTION_MS)
+    .toSorted((a, b) => b.published - a.published)
+    .slice(0, JUDGE_ITEMS);
+  if (recent.length === 0) return false;
+  try {
+    const result = await env.AI.run(TEXT_MODEL, {
+      messages: [
+        {
+          role: "user",
+          content: `These are the latest headlines of a news feed:\n${recent.map((item, index) => `${index + 1}. ${item.title}`).join("\n")}\n\nWhich of them are mainly about "${topic}" and written in Greek or English? Give their numbers.`
+        }
+      ],
+      response_format: { type: "json_schema", json_schema: HEADLINE_LIST },
+      chat_template_kwargs: { enable_thinking: false },
+      max_completion_tokens: 256,
+      temperature: 0
+    });
+    const picked = new Set((replyText(result).match(/\d+/g) || []).map(Number).filter((number) => number >= 1 && number <= recent.length));
+    return picked.size * 2 >= recent.length;
+  } catch (error) {
+    console.error(JSON.stringify({ judge_failed: String(error && error.message).slice(0, 200) }));
+    return null;
+  }
+}
+
+const reopen = (env, topic) =>
+  env.DB.prepare(
+    "UPDATE topics SET pooled_at = NULL WHERE id = ?1 AND (SELECT COUNT(*) FROM sources WHERE hidden = 1 AND topic = ?1) < ?2 AND (SELECT COUNT(*) FROM candidates WHERE topic = ?1) < ?3"
+  )
+    .bind(topic, POOL_MIN, SUGGEST_ROUNDS * SUGGEST_COUNT)
+    .run();
+
+export async function tryCandidates(env, now = Date.now()) {
+  const rows = (
+    await env.DB.prepare("SELECT c.topic, c.target, t.name FROM candidates c JOIN topics t ON t.id = c.topic WHERE c.tried = 0 ORDER BY c.rowid LIMIT ?1")
+      .bind(POOL_PER_RUN)
+      .all()
+  ).results;
   const added = [];
   for (const row of rows) {
-    const found = await discover(row.domain).catch(() => null);
-    const statements = [env.DB.prepare("UPDATE candidates SET tried = 1 WHERE topic = ?1 AND domain = ?2").bind(row.topic, row.domain)];
-    if (found && !(await env.DB.prepare("SELECT 1 AS hit FROM sources WHERE feed = ?1").bind(found.feed).first("hit"))) {
+    const found = await discover(row.target).catch(() => null);
+    const fresh = found && !(await env.DB.prepare("SELECT 1 AS hit FROM sources WHERE feed = ?1").bind(found.feed).first("hit"));
+    const fits = fresh ? await judge(env, row.name, found.items, now) : false;
+    if (fits === null) break;
+    const statements = [env.DB.prepare("UPDATE candidates SET tried = 1 WHERE topic = ?1 AND target = ?2").bind(row.topic, row.target)];
+    if (fits) {
       const id = crypto.randomUUID();
       const site = found.site || new URL(found.feed).origin;
       statements.push(
         env.DB.prepare(
           "INSERT INTO sources (id, title, site, feed, position, created_at, icon, hidden, topic) SELECT ?1, ?2, ?3, ?4, 0, ?5, ?6, 1, ?7 WHERE EXISTS (SELECT 1 FROM topics WHERE id = ?7)"
-        ).bind(id, cleanName(found.title) || new URL(site).hostname.replace(/^www\./, ""), site, found.feed, Date.now(), found.icon || null, row.topic),
+        ).bind(id, cleanName(found.title) || new URL(site).hostname.replace(/^www\./, ""), site, found.feed, now, found.icon || null, row.topic),
         env.DB.prepare("INSERT OR IGNORE INTO feeds (url, owner, fetched_at) SELECT ?1, ?2, 0 WHERE EXISTS (SELECT 1 FROM sources WHERE id = ?2)").bind(found.feed, id)
       );
       added.push(id);
     }
     await env.DB.batch(statements);
+    if (!(await env.DB.prepare("SELECT 1 AS hit FROM candidates WHERE topic = ?1 AND tried = 0").bind(row.topic).first("hit"))) await reopen(env, row.topic);
   }
   return added;
 }
@@ -204,7 +258,7 @@ async function seed(env, id) {
   const topic = await env.DB.prepare("SELECT id, name FROM topics WHERE id = ?1").bind(id).first();
   if (!topic) return;
   await suggest(env, topic, now);
-  for (const owner of await tryCandidates(env)) await refresh(env, now, { owner });
+  for (const owner of await tryCandidates(env, now)) await refresh(env, now, { owner });
   await Promise.all([icons(env), posters(env, now), rescore(env, now)]);
 }
 
@@ -777,7 +831,7 @@ export default {
         await backfill(env, now);
         await posters(env, now);
         await suggestNext(env, now);
-        const pooled = await tryCandidates(env);
+        const pooled = await tryCandidates(env, now);
         const hourly = new Date(now).getUTCMinutes() < 2;
         if (pooled.length || hourly) await icons(env);
         if (hourly) {
