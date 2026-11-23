@@ -543,13 +543,13 @@ const dialogActions = (buttons) => el("div", { class: "dialog-actions" }, button
 
 const textButton = (label, props = {}) => el("button", { class: "btn text", type: "button", text: label, ...props });
 
-export function promptDialog(title, value, { label, hint, action, cancel, required, invalid, input: props } = {}) {
+export function promptDialog(title, value, { label, action, cancel, required, invalid, input: props } = {}) {
   return new Promise((resolve) => {
     let answer = null;
     openDialog(
       (close) => {
         const done = textButton(action, { type: "submit" });
-        const input = el("input", { type: "text", name: "value", autocomplete: "off", value: value || "", placeholder: hint || " ", enterKeyHint: "done", ...props });
+        const input = el("input", { type: "text", name: "value", autocomplete: "off", value: value || "", placeholder: " ", enterKeyHint: "done", ...props });
         const initial = (value || "").trim();
         const check = () => {
           const next = input.value.trim();

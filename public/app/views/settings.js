@@ -92,7 +92,7 @@ export function renderTopics(container) {
     topics.map((topic) =>
       manageRow(topic.id, topic.name, null, {
         onRename: async () => {
-          const name = await promptDialog(t("rename"), topic.name, { label: t("topicLabel"), hint: t("topicPlaceholder"), action: t("save"), cancel: t("cancel"), required: true, invalid: (next) => taken(next, topic.id) });
+          const name = await promptDialog(t("rename"), topic.name, { label: t("topicLabel"), action: t("save"), cancel: t("cancel"), required: true, invalid: (next) => taken(next, topic.id) });
           if (name) attempt(() => renameTopic(topic.id, name));
         },
         onDelete: async () => {

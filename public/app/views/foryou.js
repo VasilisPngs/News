@@ -54,7 +54,7 @@ addEventListener("visibilitychange", () => {
 });
 
 async function newTopic() {
-  const name = await promptDialog(t("newTopic"), "", { label: t("topicLabel"), hint: t("topicPlaceholder"), action: t("add"), cancel: t("cancel"), required: true });
+  const name = await promptDialog(t("newTopic"), "", { label: t("topicLabel"), action: t("add"), cancel: t("cancel"), required: true });
   if (!name) return;
   try {
     await addTopic(name);
