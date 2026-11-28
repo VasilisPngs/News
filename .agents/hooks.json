@@ -1,0 +1,11 @@
+{
+  "cloudflare-toolchain": {
+    "SessionStart": [
+      {
+        "type": "command",
+        "command": "./hooks/session-start.sh",
+        "timeout": 300
+      }
+    ]
+  }
+}
